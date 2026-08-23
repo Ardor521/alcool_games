@@ -1,0 +1,1 @@
+function ny(a,n,l){const r=a[n%a.length],m=l.text.includes("{o}")||l.kind==="duo"?w1(a,r.id):void 0;return l.kind==="all"?{p:js(a),o:m}:{p:r,o:m}}

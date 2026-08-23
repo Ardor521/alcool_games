@@ -1,0 +1,1 @@
+function tw(a){const n=100/a.length;return`conic-gradient(${a.map((r,c)=>{const m=c*n,f=(c+1)*n;return`${r.color} ${m}% ${f}%`}).join(", ")})`}
