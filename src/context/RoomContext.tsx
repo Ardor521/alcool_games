@@ -407,7 +407,6 @@ export function RoomProvider({ children }: { children: ReactNode }) {
             const msg = raw as Wire
             if (msg.t === 'state') {
               if (!msg.s) return
-              if (snapRef.current.v && msg.s.v < snapRef.current.v) return
               window.clearTimeout(t)
               hostRef.current = false
               setIsHost(false)
@@ -475,6 +474,7 @@ export function RoomProvider({ children }: { children: ReactNode }) {
         return
       }
       const next = applyAction(snapRef.current, action)
+      next.v = snapRef.current.v
       snapRef.current = next
       setSnap(next)
       const conn = hostConnRef.current

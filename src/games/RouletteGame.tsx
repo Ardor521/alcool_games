@@ -74,8 +74,9 @@ export function RouletteGame() {
     if (result.sips === 99) players.forEach((p) => addSips(p.id, 1))
     else if (result.sips < 0 && giveTo) addSips(giveTo, Math.abs(result.sips))
     else if (result.sips > 0 && result.sips < 99) addSips(spinner.id, result.sips === 5 ? 4 : result.sips)
+    const nextTurn = (Number(turn) + 1) % n
     setResult(null)
-    setTurn((v) => (Number(v) + 1) % n)
+    setTurn(nextTurn)
   }
 
   return (
@@ -133,6 +134,7 @@ export function RouletteGame() {
               ) : (
                 <button type="button" onClick={() => apply()} className="btn-primary mt-auto w-full justify-center !py-2 text-sm">
                   Valider & suivant
+                  {players[(Number(turn) + 1) % n] ? ` → ${players[(Number(turn) + 1) % n].name}` : ''}
                 </button>
               )}
             </motion.div>

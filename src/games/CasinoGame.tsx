@@ -223,6 +223,11 @@ export function CasinoGame() {
     if (missing) setLucky((prev) => luckyNumbers(players, prev ?? {}))
   }, [players.map((p) => p.id).join(','), connected, isHost])
 
+  useEffect(() => {
+    if (!connected || !isHost) return
+    if (Object.keys(lucky).length) setLucky(lucky)
+  }, [])
+
   const spin = () => {
     if (spinning || !croupier || !mySpin) return
     setSpinnerId(croupier.id)
@@ -255,7 +260,7 @@ export function CasinoGame() {
       return
     }
     setResult(null)
-    setTurn((v) => (Number(v) + 1) % n)
+    setTurn((Number(turn) + 1) % n)
   }
 
   return (
@@ -383,7 +388,9 @@ export function CasinoGame() {
                 </div>
               ) : (
                 <button type="button" onClick={() => apply()} className="btn-primary mt-auto w-full justify-center !py-2 text-sm">
-                  {result.relance ? 'Relancer' : 'Valider & suivant'}
+                  {result.relance
+                    ? 'Relancer'
+                    : `Valider & suivant${players[(Number(turn) + 1) % n] ? ` → ${players[(Number(turn) + 1) % n].name}` : ''}`}
                 </button>
               )}
               <WaterGlass id="casino-panel" size="sm" className="self-end" />
@@ -392,7 +399,7 @@ export function CasinoGame() {
         </div>
       </div>
       <div className="card space-y-2 p-3">
-        <p className="text-[11px] uppercase tracking-widest text-white/45">Numéros porte-bonheur</p>
+        <p className="text-[11px] uppercase tracking-widest text-white/45">Numéros porte-bonheur (table)</p>
         <div className="flex gap-2 overflow-x-auto pb-1">
           {players.map((p) => (
             <div key={p.id} className="min-w-[120px] rounded-xl bg-white/5 p-2">
@@ -400,7 +407,9 @@ export function CasinoGame() {
                 <PlayerAvatar player={p} size="sm" />
                 <span className="truncate text-xs font-medium">{p.name}</span>
               </div>
-              <p className="text-[10px] leading-relaxed text-white/55">{(lucky[p.id] ?? []).join(', ')}</p>
+              <p className="text-[10px] leading-relaxed text-white/55">
+                {(lucky[p.id] ?? []).length ? lucky[p.id].join(', ') : '…'}
+              </p>
             </div>
           ))}
         </div>
