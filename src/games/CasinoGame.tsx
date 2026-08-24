@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
 import { useParty } from '../context/PartyContext'
 import { useRoom } from '../context/RoomContext'
@@ -208,19 +208,19 @@ export function CasinoGame() {
   const [spinIdx, setSpinIdx] = useSyncedState('casino.idx', -1)
   const [spinToken, setSpinToken] = useSyncedState('casino.token', 0)
   const [spinnerId, setSpinnerId] = useSyncedState<string | null>('casino.spinner', null)
-  const [confirmed, setConfirmed] = useSyncedState('casino.ok', -1)
+  const [settled, setSettled] = useSyncedState('casino.ok', -1)
   const [showRules, setShowRules] = useState(false)
   const [lucky, setLucky] = useSyncedState<Record<string, number[]>>('casino.lucky', {})
   const croupier = playerByTurn(players, turnId)
   const spinner = players.find((p) => p.id === spinnerId) ?? croupier
   const mySpin = !connected || !selfId || selfId === croupier?.id
-  const next = players.find((p) => p.id === nextPlayerId(players, croupier?.id))
+  const giveTarget = players.find((p) => p.id === nextPlayerId(players, spinner?.id))
   const idx = Number(spinIdx)
-  const result =
-    !spinning && idx >= 0 && croupier
-      ? resolve(WHEEL[idx % WHEEL.length], players, spinner?.id ?? croupier.id, lucky)
+  const landed =
+    idx >= 0 && spinner
+      ? resolve(WHEEL[idx % WHEEL.length], players, spinner.id, lucky)
       : null
-  const pending = !!result && confirmed !== spinToken
+  const result = !spinning && landed ? landed : null
 
   useEffect(() => {
     if (connected && !isHost) return
@@ -233,7 +233,7 @@ export function CasinoGame() {
   }, [turnId, players, connected, isHost, setTurnId])
 
   const spin = () => {
-    if (spinning || !croupier || !mySpin || pending) return
+    if (spinning || !croupier || !mySpin) return
     const nextIdx = Math.floor(Math.random() * WHEEL.length)
     const extra = 8 * 360 - (nextIdx * STEP + STEP / 2)
     setSpinnerId(croupier.id)
@@ -248,25 +248,25 @@ export function CasinoGame() {
 
   useEffect(() => {
     if (!spinning) return
+    if (connected && !isHost) return
     const t = window.setTimeout(() => setSpinning(false), 4200)
     return () => window.clearTimeout(t)
-  }, [spinning, spinToken, setSpinning])
+  }, [spinning, spinToken, connected, isHost, setSpinning])
 
-  const apply = (giveTo?: string) => {
-    if (!result || confirmed === spinToken) return
-    if (result.pendingGive > 0 && !giveTo) return
-    result.events.forEach((e) => addSips(e.playerId, e.amount))
-    if (result.pendingGive && giveTo) addSips(giveTo, result.pendingGive)
-    setConfirmed(spinToken)
-    if (result.relance) {
-      setSpinIdx(-1)
-      return
-    }
-    const nid = nextPlayerId(players, croupier?.id)
-    setSpinIdx(-1)
+  const lastOk = useRef(-999)
+  useEffect(() => {
+    if (spinning || !landed || !spinner) return
+    if (settled === spinToken || lastOk.current === spinToken) return
+    if (connected && !isHost) return
+    lastOk.current = Number(spinToken)
+    landed.events.forEach((e) => addSips(e.playerId, e.amount))
+    if (landed.pendingGive > 0 && giveTarget) addSips(giveTarget.id, landed.pendingGive)
+    setSettled(spinToken)
+    if (landed.relance) return
+    const nid = nextPlayerId(players, spinner.id)
     setTurnId(nid)
     if (nid) setActiveTurnId(nid)
-  }
+  }, [spinning, spinToken, settled, landed, spinner, giveTarget, players, connected, isHost, addSips, setSettled, setTurnId, setActiveTurnId])
 
   return (
     <div className="space-y-4">
@@ -339,13 +339,13 @@ export function CasinoGame() {
           <button
             type="button"
             onClick={spin}
-            disabled={spinning || !mySpin || pending}
+            disabled={spinning || !mySpin}
             className="btn-primary w-full justify-center py-3 disabled:opacity-50"
           >
-            {spinning ? 'La boule tourne…' : pending ? 'Valide le résultat d’abord' : mySpin ? 'Lancer la boule' : `Au tour de ${croupier?.name}`}
+            {spinning ? 'La boule tourne…' : mySpin ? 'Lancer la boule' : `Au tour de ${croupier?.name}`}
           </button>
         </div>
-        <div className="card flex min-h-[240px] flex-col gap-2 p-3 sm:min-h-[300px] sm:p-4">
+        <div className="card flex min-h-[180px] flex-col gap-2 p-3 sm:min-h-[300px] sm:p-4">
           <p className="text-[10px] uppercase tracking-widest text-amber-200 sm:text-xs">Résultat & implication</p>
           {spinning || !result ? (
             <div className="flex flex-1 flex-col justify-center text-sm text-white/45">
@@ -375,29 +375,16 @@ export function CasinoGame() {
                   <li key={l}>• {l}</li>
                 ))}
               </ul>
-              {result.pendingGive > 0 ? (
-                <div className="space-y-2">
-                  <p className="text-xs text-white/70">
-                    La case l’oblige à <strong className="text-white">donner {result.pendingGive} gorgée(s)</strong> à
-                    quelqu’un d’autre :
-                  </p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {players
-                      .filter((p) => p.id !== spinner?.id)
-                      .map((p) => (
-                        <button key={p.id} type="button" onClick={() => apply(p.id)} className="btn-ghost !px-2 !py-1 text-xs">
-                          {p.name}
-                        </button>
-                      ))}
-                  </div>
-                </div>
-              ) : (
-                <button type="button" onClick={() => apply()} className="btn-primary mt-auto w-full justify-center !py-3 text-sm">
-                  {result.relance
-                    ? 'Valider et relancer'
-                    : `Valider et confirmer${next ? ` → ${next.name}` : ''}`}
-                </button>
+              {result.pendingGive > 0 && giveTarget && (
+                <p className="text-xs text-amber-100">
+                  {result.pendingGive} gorgée(s) données à {giveTarget.name}.
+                </p>
               )}
+              <p className="rounded-xl bg-emerald-400/15 px-3 py-2 text-sm font-semibold text-emerald-200">
+                {result.relance
+                  ? 'Gorgées comptabilisées · relance'
+                  : `Gorgées comptabilisées${croupier ? ` · au tour de ${croupier.name}` : ''}`}
+              </p>
               <WaterGlass id="casino-panel" size="sm" className="self-end" />
             </motion.div>
           )}

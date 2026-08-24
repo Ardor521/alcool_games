@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import { motion } from 'framer-motion'
 import { useParty } from '../context/PartyContext'
 import { useRoom } from '../context/RoomContext'
@@ -31,11 +31,11 @@ export function RouletteGame() {
   const [spinIdx, setSpinIdx] = useSyncedState('rou.idx', -1)
   const [token, setToken] = useSyncedState('rou.token', 0)
   const [spinnerId, setSpinnerId] = useSyncedState<string | null>('rou.spinner', null)
-  const [confirmed, setConfirmed] = useSyncedState('rou.ok', -1)
+  const [settled, setSettled] = useSyncedState('rou.ok', -1)
   const current = playerByTurn(players, turnId)
   const spinner = players.find((p) => p.id === spinnerId) ?? current
   const mySpin = !connected || !selfId || selfId === current?.id
-  const next = players.find((p) => p.id === nextPlayerId(players, current?.id))
+  const giveTarget = players.find((p) => p.id === nextPlayerId(players, spinner?.id))
   const slices = useMemo<Slice[]>(
     () => [
       { label: '1 gorgée', sips: 1, color: '#34d399' },
@@ -51,11 +51,11 @@ export function RouletteGame() {
   )
 
   const idx = Number(spinIdx)
-  const result = !spinning && idx >= 0 ? slices[idx % slices.length] : null
-  const pending = !!result && confirmed !== token
+  const landed = idx >= 0 ? slices[idx % slices.length] : null
+  const result = !spinning && landed ? landed : null
 
   const spin = () => {
-    if (spinning || !mySpin || !current || pending) return
+    if (spinning || !mySpin || !current) return
     const nextIdx = Math.floor(Math.random() * slices.length)
     const step = 360 / slices.length
     const extra = 6 * 360 + (360 - nextIdx * step - step / 2)
@@ -71,22 +71,26 @@ export function RouletteGame() {
 
   useEffect(() => {
     if (!spinning) return
+    if (connected && !isHost) return
     const t = window.setTimeout(() => setSpinning(false), 3200)
     return () => window.clearTimeout(t)
-  }, [spinning, token, setSpinning])
+  }, [spinning, token, connected, isHost, setSpinning])
 
-  const apply = (giveTo?: string) => {
-    if (!result || !spinner || confirmed === token) return
-    if (result.sips < 0 && !giveTo) return
-    if (result.sips === 99) players.forEach((p) => addSips(p.id, 1))
-    else if (result.sips < 0 && giveTo) addSips(giveTo, Math.abs(result.sips))
-    else if (result.sips > 0 && result.sips < 99) addSips(spinner.id, result.sips === 5 ? 4 : result.sips)
-    setConfirmed(token)
-    const nid = nextPlayerId(players, current?.id)
-    setSpinIdx(-1)
+  const lastOk = useRef(-999)
+  useEffect(() => {
+    if (spinning || !landed || !spinner) return
+    if (settled === token || lastOk.current === token) return
+    if (connected && !isHost) return
+    lastOk.current = Number(token)
+    const giveTo = giveTarget?.id
+    if (landed.sips === 99) players.forEach((p) => addSips(p.id, 1))
+    else if (landed.sips < 0 && giveTo) addSips(giveTo, Math.abs(landed.sips))
+    else if (landed.sips > 0 && landed.sips < 99) addSips(spinner.id, landed.sips === 5 ? 4 : landed.sips)
+    setSettled(token)
+    const nid = nextPlayerId(players, spinner.id)
     setTurnId(nid)
     if (nid) setActiveTurnId(nid)
-  }
+  }, [spinning, token, settled, landed, spinner, giveTarget, players, connected, isHost, addSips, setSettled, setTurnId, setActiveTurnId])
 
   return (
     <div className="space-y-4">
@@ -110,13 +114,13 @@ export function RouletteGame() {
           <button
             type="button"
             onClick={spin}
-            disabled={spinning || !mySpin || pending}
+            disabled={spinning || !mySpin}
             className="btn-primary w-full justify-center py-3 disabled:opacity-50"
           >
-            {spinning ? 'La roue tourne…' : pending ? 'Valide le résultat d’abord' : mySpin ? 'Lancer la roulette' : `Au tour de ${current?.name}`}
+            {spinning ? 'La roue tourne…' : mySpin ? 'Lancer la roulette' : `Au tour de ${current?.name}`}
           </button>
         </div>
-        <div className="card flex min-h-[220px] flex-col gap-3 p-3 sm:min-h-[280px] sm:p-4">
+        <div className="card flex min-h-[180px] flex-col gap-3 p-3 sm:min-h-[280px] sm:p-4">
           <p className="text-[10px] uppercase tracking-widest text-emerald-200 sm:text-xs">Résultat & implication</p>
           {spinning || !result ? (
             <div className="flex flex-1 flex-col justify-center text-sm text-white/45">
@@ -130,26 +134,12 @@ export function RouletteGame() {
                 {result.sips === 0 && `${spinner?.name} passe son tour. Ouf.`}
                 {result.sips === 5 && `${spinner?.name} prend un cul sec (4 gorgées).`}
                 {result.sips > 0 && result.sips < 5 && `${spinner?.name} boit ${result.sips} gorgée(s).`}
-                {result.sips < 0 && `${spinner?.name} donne 2 gorgées à quelqu’un.`}
+                {result.sips < 0 && `${giveTarget?.name ?? 'le suivant'} reçoit 2 gorgées.`}
               </p>
-              {result.sips < 0 ? (
-                <div className="space-y-2">
-                  <p className="text-xs text-white/55">Choisis qui boit, puis les gorgées sont comptées :</p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {players
-                      .filter((p) => p.id !== spinner?.id)
-                      .map((p) => (
-                        <button key={p.id} type="button" onClick={() => apply(p.id)} className="btn-primary !px-3 !py-2 text-xs">
-                          {p.name}
-                        </button>
-                      ))}
-                  </div>
-                </div>
-              ) : (
-                <button type="button" onClick={() => apply()} className="btn-primary mt-auto w-full justify-center !py-3 text-sm">
-                  Valider et confirmer{next ? ` → ${next.name}` : ''}
-                </button>
-              )}
+              <p className="rounded-xl bg-emerald-400/15 px-3 py-2 text-sm font-semibold text-emerald-200">
+                Gorgées comptabilisées
+                {current ? ` · au tour de ${current.name}` : ''}
+              </p>
             </motion.div>
           )}
         </div>
