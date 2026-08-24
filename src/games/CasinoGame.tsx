@@ -200,23 +200,27 @@ function pocketPath(i: number) {
 const FILL = { red: '#dc2626', black: '#0f172a', green: '#16a34a' }
 
 export function CasinoGame() {
-  const { players, addSips, selfId, connected } = useParty()
+  const { players, addSips, selfId, connected, setActiveTurnId } = useParty()
   const { isHost } = useRoom()
   const [turnId, setTurnId] = useSyncedState<string | null>('casino.turnId', players[0]?.id ?? null)
   const [spinning, setSpinning] = useSyncedState('casino.spin', false)
   const [rot, setRot] = useSyncedState('casino.rot', 0)
-  const [result, setResult] = useSyncedState<Result | null>('casino.result', null)
   const [spinIdx, setSpinIdx] = useSyncedState('casino.idx', -1)
   const [spinToken, setSpinToken] = useSyncedState('casino.token', 0)
   const [spinnerId, setSpinnerId] = useSyncedState<string | null>('casino.spinner', null)
+  const [confirmed, setConfirmed] = useSyncedState('casino.ok', -1)
   const [showRules, setShowRules] = useState(false)
-  const [lucky, setLucky] = useSyncedState<Record<string, number[]>>('casino.lucky', () =>
-    connected && !isHost ? {} : luckyNumbers(players),
-  )
+  const [lucky, setLucky] = useSyncedState<Record<string, number[]>>('casino.lucky', {})
   const croupier = playerByTurn(players, turnId)
   const spinner = players.find((p) => p.id === spinnerId) ?? croupier
   const mySpin = !connected || !selfId || selfId === croupier?.id
   const next = players.find((p) => p.id === nextPlayerId(players, croupier?.id))
+  const idx = Number(spinIdx)
+  const result =
+    !spinning && idx >= 0 && croupier
+      ? resolve(WHEEL[idx % WHEEL.length], players, spinner?.id ?? croupier.id, lucky)
+      : null
+  const pending = !!result && confirmed !== spinToken
 
   useEffect(() => {
     if (connected && !isHost) return
@@ -225,43 +229,43 @@ export function CasinoGame() {
   }, [players.map((p) => p.id).join(','), connected, isHost])
 
   useEffect(() => {
-    if (!connected || !isHost) return
-    if (Object.keys(lucky).length) setLucky(lucky)
-  }, [])
+    if (!turnId && players[0] && (!connected || isHost)) setTurnId(players[0].id)
+  }, [turnId, players, connected, isHost, setTurnId])
 
   const spin = () => {
-    if (spinning || !croupier || !mySpin) return
+    if (spinning || !croupier || !mySpin || pending) return
+    const nextIdx = Math.floor(Math.random() * WHEEL.length)
+    const extra = 8 * 360 - (nextIdx * STEP + STEP / 2)
     setSpinnerId(croupier.id)
-    const idx = Math.floor(Math.random() * WHEEL.length)
-    const extra = 8 * 360 - (idx * STEP + STEP / 2)
-    setResult(null)
-    setSpinIdx(idx)
-    setSpinToken((t) => t + 1)
-    setRot((prev) => prev + extra - (((prev % 360) + 360) % 360))
+    setSpinIdx(nextIdx)
+    setSpinToken((t) => Number(t) + 1)
+    setRot((prev) => {
+      const cur = Number(prev) || 0
+      return cur + extra - (((cur % 360) + 360) % 360)
+    })
     setSpinning(true)
   }
 
   useEffect(() => {
-    if (connected && !isHost) return
-    if (!spinning || spinIdx < 0 || !croupier) return
-    const t = window.setTimeout(() => {
-      const next = resolve(WHEEL[spinIdx], players, spinner?.id ?? croupier.id, lucky)
-      setResult(next)
-      setSpinning(false)
-    }, 4200)
+    if (!spinning) return
+    const t = window.setTimeout(() => setSpinning(false), 4200)
     return () => window.clearTimeout(t)
-  }, [spinning, spinIdx, spinToken, croupier?.id, connected, isHost])
+  }, [spinning, spinToken, setSpinning])
 
   const apply = (giveTo?: string) => {
-    if (!result) return
+    if (!result || confirmed === spinToken) return
+    if (result.pendingGive > 0 && !giveTo) return
     result.events.forEach((e) => addSips(e.playerId, e.amount))
     if (result.pendingGive && giveTo) addSips(giveTo, result.pendingGive)
+    setConfirmed(spinToken)
     if (result.relance) {
-      setResult(null)
+      setSpinIdx(-1)
       return
     }
-    setResult(null)
-    setTurnId(nextPlayerId(players, croupier?.id))
+    const nid = nextPlayerId(players, croupier?.id)
+    setSpinIdx(-1)
+    setTurnId(nid)
+    if (nid) setActiveTurnId(nid)
   }
 
   return (
@@ -335,15 +339,15 @@ export function CasinoGame() {
           <button
             type="button"
             onClick={spin}
-            disabled={spinning || !mySpin}
+            disabled={spinning || !mySpin || pending}
             className="btn-primary w-full justify-center py-3 disabled:opacity-50"
           >
-            {spinning ? 'La boule tourne…' : mySpin ? 'Lancer la boule' : `Au tour de ${croupier?.name}`}
+            {spinning ? 'La boule tourne…' : pending ? 'Valide le résultat d’abord' : mySpin ? 'Lancer la boule' : `Au tour de ${croupier?.name}`}
           </button>
         </div>
         <div className="card flex min-h-[240px] flex-col gap-2 p-3 sm:min-h-[300px] sm:p-4">
           <p className="text-[10px] uppercase tracking-widest text-amber-200 sm:text-xs">Résultat & implication</p>
-          {!result || spinning ? (
+          {spinning || !result ? (
             <div className="flex flex-1 flex-col justify-center text-sm text-white/45">
               <p>{spinning ? 'La boule décide…' : 'Espace libre : le résumé s’affichera ici après le lancer.'}</p>
             </div>
@@ -388,10 +392,10 @@ export function CasinoGame() {
                   </div>
                 </div>
               ) : (
-                <button type="button" onClick={() => apply()} className="btn-primary mt-auto w-full justify-center !py-2 text-sm">
+                <button type="button" onClick={() => apply()} className="btn-primary mt-auto w-full justify-center !py-3 text-sm">
                   {result.relance
-                    ? 'Relancer'
-                    : `Valider & suivant${next ? ` → ${next.name}` : ''}`}
+                    ? 'Valider et relancer'
+                    : `Valider et confirmer${next ? ` → ${next.name}` : ''}`}
                 </button>
               )}
               <WaterGlass id="casino-panel" size="sm" className="self-end" />

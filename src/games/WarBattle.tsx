@@ -235,7 +235,12 @@ export function WarBattle() {
           <strong className="text-white">x5 Tyran</strong> — +3 infligés, +1 bouclier, tribut 1 gorgée.
         </p>
       </div>
-      {phase === 'pick' && (
+      {phase === 'pick' && connected && !isHost && (
+        <div className="card p-6 text-center text-sm text-white/60">
+          L’hôte distribue les jeux. Tes cartes apparaîtront ici.
+        </div>
+      )}
+      {phase === 'pick' && (!connected || isHost) && (
         <div className="card space-y-3 p-4">
           <div className="grid grid-cols-2 gap-3">
             <label className="space-y-1 text-xs text-white/60">

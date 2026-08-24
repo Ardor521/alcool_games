@@ -11,12 +11,13 @@ export function TurnBanner({
   label?: string
   hint?: string
 }) {
-  const { players, setActiveTurnId } = useParty()
+  const { players, setActiveTurnId, connected } = useParty()
   const player = players.find((p) => p.id === playerId) ?? players[0]
 
   useEffect(() => {
-    if (player?.id) setActiveTurnId(player.id)
-  }, [player?.id, setActiveTurnId])
+    if (!player?.id || connected) return
+    setActiveTurnId(player.id)
+  }, [player?.id, setActiveTurnId, connected])
 
   if (!player) return null
 
