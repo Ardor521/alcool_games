@@ -1,15 +1,15 @@
-import { useMemo, useState } from 'react'
+import { useSyncedMap, useSyncedState } from '../lib/useSyncedState'
 import { useParty } from '../context/PartyContext'
 import { RATHER_PAIRS } from '../lib/catalog'
 import { shuffle } from '../lib/utils'
 import { SipButtons } from '../components/SipToast'
 
 export function RatherGame() {
-  const { players, addSips } = useParty()
-  const deck = useMemo(() => shuffle(RATHER_PAIRS), [])
-  const [i, setI] = useState(0)
-  const [votes, setVotes] = useState<Record<string, number>>({})
-  const [revealed, setRevealed] = useState(false)
+  const { players, addSips, selfId, connected } = useParty()
+  const [deck] = useSyncedState('rather.deck', () => shuffle(RATHER_PAIRS))
+  const [i, setI] = useSyncedState('rather.i', 0)
+  const [votes, setVoteField, resetVotes] = useSyncedMap<number>('rather.votes')
+  const [revealed, setRevealed] = useSyncedState('rather.revealed', false)
   const [a, b] = deck[i % deck.length]
   const sideA = players.filter((p) => votes[p.id] === 0)
   const sideB = players.filter((p) => votes[p.id] === 1)
@@ -18,7 +18,7 @@ export function RatherGame() {
 
   const next = () => {
     setI((x) => x + 1)
-    setVotes({})
+    resetVotes()
     setRevealed(false)
   }
 
@@ -41,16 +41,16 @@ export function RatherGame() {
             <span className="flex-1 truncate text-sm">{p.name}</span>
             <button
               type="button"
-              disabled={revealed}
-              onClick={() => setVotes((v) => ({ ...v, [p.id]: 0 }))}
+              disabled={revealed || (!!connected && !!selfId && p.id !== selfId)}
+              onClick={() => setVoteField(p.id, 0)}
               className={`rounded-full px-3 py-1 text-xs ${votes[p.id] === 0 ? 'bg-rose-500 text-white' : 'bg-white/10'}`}
             >
               A
             </button>
             <button
               type="button"
-              disabled={revealed}
-              onClick={() => setVotes((v) => ({ ...v, [p.id]: 1 }))}
+              disabled={revealed || (!!connected && !!selfId && p.id !== selfId)}
+              onClick={() => setVoteField(p.id, 1)}
               className={`rounded-full px-3 py-1 text-xs ${votes[p.id] === 1 ? 'bg-cyan-500 text-black' : 'bg-white/10'}`}
             >
               B

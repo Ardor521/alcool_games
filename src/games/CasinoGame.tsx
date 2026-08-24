@@ -1,6 +1,7 @@
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import { motion } from 'framer-motion'
 import { useParty } from '../context/PartyContext'
+import { useSyncedState } from '../lib/useSyncedState'
 import type { Player } from '../types'
 import { PlayerAvatar } from '../components/PlayerAvatar'
 import { TurnBanner } from '../components/TurnBanner'
@@ -195,14 +196,15 @@ function pocketPath(i: number) {
 const FILL = { red: '#dc2626', black: '#0f172a', green: '#16a34a' }
 
 export function CasinoGame() {
-  const { players, addSips } = useParty()
-  const [turn, setTurn] = useState(0)
-  const [spinning, setSpinning] = useState(false)
-  const [rot, setRot] = useState(0)
-  const [result, setResult] = useState<Result | null>(null)
+  const { players, addSips, selfId, connected } = useParty()
+  const [turn, setTurn] = useSyncedState('casino.turn', 0)
+  const [spinning, setSpinning] = useSyncedState('casino.spin', false)
+  const [rot, setRot] = useSyncedState('casino.rot', 0)
+  const [result, setResult] = useSyncedState<Result | null>('casino.result', null)
   const [showRules, setShowRules] = useState(false)
-  const lucky = useMemo(() => luckyNumbers(players), [players])
+  const [lucky] = useSyncedState('casino.lucky', () => luckyNumbers(players))
   const croupier = players[turn % Math.max(players.length, 1)]
+  const mySpin = !connected || !selfId || selfId === croupier?.id
 
   const spin = () => {
     if (spinning || !croupier) return
@@ -293,8 +295,13 @@ export function CasinoGame() {
               </div>
             </div>
           </div>
-          <button type="button" onClick={spin} disabled={spinning} className="btn-primary w-full justify-center py-3 disabled:opacity-50">
-            {spinning ? 'La boule tourne…' : 'Lancer la boule'}
+          <button
+            type="button"
+            onClick={spin}
+            disabled={spinning || !mySpin}
+            className="btn-primary w-full justify-center py-3 disabled:opacity-50"
+          >
+            {spinning ? 'La boule tourne…' : mySpin ? 'Lancer la boule' : `Au tour de ${croupier?.name}`}
           </button>
         </div>
         <div className="card flex min-h-[240px] flex-col gap-2 p-3 sm:min-h-[300px] sm:p-4">

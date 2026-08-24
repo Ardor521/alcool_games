@@ -6,7 +6,6 @@ import { useParty } from '../context/PartyContext'
 import { useTableControl } from '../lib/useTableControl'
 import { PlayerAvatar } from './PlayerAvatar'
 import { WaterGlass } from './WaterGlass'
-import { TurnLock } from './TurnLock'
 
 export function GameShell({
   game,
@@ -19,7 +18,7 @@ export function GameShell({
 }) {
   const navigate = useNavigate()
   const { activePlayers, pausedPlayers, activeTurnId, selfId } = useParty()
-  const { connected, isHost, myTurn, mode, turnName } = useTableControl()
+  const { connected, isHost, myTurn } = useTableControl()
 
   return (
     <div className="space-y-4">
@@ -93,16 +92,14 @@ export function GameShell({
       {connected && (
         <p className="text-center text-[11px] uppercase tracking-widest text-white/40">
           {isHost
-            ? 'Tu es l’hôte — tu lances et tu avances la table.'
-            : mode === 'all'
-              ? 'Tout le monde peut jouer maintenant.'
-              : myTurn
-                ? 'C’est à toi — tes actions passent sur tous les écrans.'
-                : `En attente de ${turnName ?? 'l’hôte'}…`}
+            ? 'Hôte — tes actions et celles des joueurs se synchronisent.'
+            : myTurn
+              ? 'C’est à toi. Tes clics passent sur tous les écrans.'
+              : 'Joue ta part. La table se met à jour en direct.'}
         </p>
       )}
 
-      <TurnLock>{children}</TurnLock>
+      {children}
       {footer}
     </div>
   )

@@ -1,4 +1,4 @@
-import { useSyncedState } from '../lib/useSyncedState'
+import { useSyncedMap, useSyncedState } from '../lib/useSyncedState'
 import { AnimatePresence, motion } from 'framer-motion'
 import { useParty } from '../context/PartyContext'
 import { VOTE_PROMPTS } from '../lib/catalog'
@@ -7,15 +7,20 @@ import { PlayerAvatar } from '../components/PlayerAvatar'
 import { WaterGlass } from '../components/WaterGlass'
 
 export function VoteGame() {
-  const { players, addSips } = useParty()
+  const { players, addSips, selfId, connected } = useParty()
   const [deck] = useSyncedState('vote.deck', () => shuffle(VOTE_PROMPTS))
   const [i, setI] = useSyncedState('vote.i', 0)
-  const [votes, setVotes] = useSyncedState<Record<string, number>>('vote.votes', {})
+  const [ballots, setBallot, resetBallots] = useSyncedMap<string>('vote.ballots')
   const [revealed, setRevealed] = useSyncedState('vote.revealed', false)
   const q = deck[i % deck.length]
-  const total = Object.values(votes).reduce((s, n) => s + n, 0)
-  const max = Math.max(0, ...Object.values(votes))
-  const winners = players.filter((p) => (votes[p.id] ?? 0) === max && max > 0)
+  const counts: Record<string, number> = {}
+  Object.values(ballots).forEach((target) => {
+    counts[target] = (counts[target] ?? 0) + 1
+  })
+  const total = Object.values(counts).reduce((s, n) => s + n, 0)
+  const max = Math.max(0, ...Object.values(counts))
+  const winners = players.filter((p) => (counts[p.id] ?? 0) === max && max > 0)
+  const myVote = selfId ? ballots[selfId] : undefined
 
   return (
     <div className="space-y-4">
@@ -29,7 +34,7 @@ export function VoteGame() {
           <p className="text-xs uppercase tracking-[0.2em] text-rose-200">Qui est le plus…</p>
           <p className="mt-3 font-display text-2xl leading-snug sm:text-3xl">{q}</p>
           <p className="mt-3 text-sm text-white/55">
-            Chaque joueur vote une fois (ou plus si vous trichez 😇). Puis révélez.
+            Chaque joueur vote depuis son téléphone. Les voix se cumulent. Puis révélez.
           </p>
         </motion.div>
       </AnimatePresence>
@@ -39,18 +44,22 @@ export function VoteGame() {
             key={p.id}
             type="button"
             onClick={() => {
-              if (!revealed) setVotes((v) => ({ ...v, [p.id]: (v[p.id] ?? 0) + 1 }))
+              if (revealed) return
+              if (connected && selfId) setBallot(selfId, p.id)
+              else setBallot(`local-${total}-${p.id}`, p.id)
             }}
-            className="card flex w-full items-center gap-3 px-3 py-2.5 text-left hover:bg-white/5"
+            className={`card flex w-full items-center gap-3 px-3 py-2.5 text-left hover:bg-white/5 ${
+              myVote === p.id ? 'ring-2 ring-fuchsia-300/70' : ''
+            }`}
           >
             <PlayerAvatar player={p} size="sm" />
             <span className="flex-1 font-medium">{p.name}</span>
             {revealed ? (
               <span className="rounded-full bg-white/10 px-2 py-0.5 text-xs">
-                {votes[p.id] ?? 0} vote{(votes[p.id] ?? 0) > 1 ? 's' : ''}
+                {counts[p.id] ?? 0} vote{(counts[p.id] ?? 0) > 1 ? 's' : ''}
               </span>
             ) : (
-              <span className="text-xs text-white/40">voter</span>
+              <span className="text-xs text-white/40">{myVote === p.id ? 'ton vote' : 'voter'}</span>
             )}
           </button>
         ))}
@@ -77,7 +86,7 @@ export function VoteGame() {
             type="button"
             onClick={() => {
               setI((x) => x + 1)
-              setVotes({})
+              resetBallots()
               setRevealed(false)
             }}
             className="btn-primary w-full justify-center py-3"

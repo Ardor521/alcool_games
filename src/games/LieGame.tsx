@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useSyncedMap, useSyncedState } from '../lib/useSyncedState'
 import { useParty } from '../context/PartyContext'
 import { LIE_STARTERS } from '../lib/catalog'
 import { pick } from '../lib/utils'
@@ -7,11 +7,11 @@ import { PlayerAvatar } from '../components/PlayerAvatar'
 import { SipButtons } from '../components/SipToast'
 
 export function LieGame() {
-  const { players, addSips } = useParty()
-  const [turn, setTurn] = useState(0)
-  const [starter, setStarter] = useState(() => pick(LIE_STARTERS))
-  const [votes, setVotes] = useState<Record<string, number>>({})
-  const [lie, setLie] = useState<number | null>(null)
+  const { players, addSips, selfId, connected } = useParty()
+  const [turn, setTurn] = useSyncedState('lie.turn', 0)
+  const [starter, setStarter] = useSyncedState('lie.start', () => pick(LIE_STARTERS))
+  const [votes, setVoteField, resetVotes] = useSyncedMap<number>('lie.votes')
+  const [lie, setLie] = useSyncedState<number | null>('lie.lie', null)
   const teller = players[turn % Math.max(players.length, 1)]
 
   return (
@@ -50,7 +50,8 @@ export function LieGame() {
                 <button
                   key={n}
                   type="button"
-                  onClick={() => setVotes((v) => ({ ...v, [p.id]: n }))}
+                  onClick={() => setVoteField(p.id, n)}
+                  disabled={!!connected && !!selfId && p.id !== selfId}
                   className={`h-8 w-8 rounded-lg text-xs ${votes[p.id] === n ? 'bg-white text-black' : 'bg-white/10'}`}
                 >
                   {n}
@@ -80,7 +81,7 @@ export function LieGame() {
           onClick={() => {
             setTurn((t) => t + 1)
             setStarter(pick(LIE_STARTERS))
-            setVotes({})
+            resetVotes()
             setLie(null)
           }}
           className="btn-primary justify-center"

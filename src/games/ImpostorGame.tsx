@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useSyncedMap, useSyncedState } from '../lib/useSyncedState'
 import { useParty } from '../context/PartyContext'
 import { IMPOSTOR_WORDS } from '../lib/catalog'
 import { pick, shuffle } from '../lib/utils'
@@ -8,16 +8,16 @@ import { SipButtons } from '../components/SipToast'
 type Phase = 'deal' | 'talk' | 'vote' | 'end'
 
 export function ImpostorGame() {
-  const { players, addSips } = useParty()
-  const [round, setRound] = useState(0)
-  const secret = useMemo(() => {
+  const { players, addSips, selfId, connected } = useParty()
+  const [round, setRound] = useSyncedState('imp.round', 0)
+  const [secret] = useSyncedState(`imp.secret.${round}`, () => {
     const word = pick(IMPOSTOR_WORDS)
     const impostor = pick(players)
     return { word, impostorId: impostor?.id ?? players[0]?.id ?? '', order: shuffle(players) }
-  }, [round, players])
-  const [i, setI] = useState(0)
-  const [votes, setVotes] = useState<Record<string, string>>({})
-  const [phase, setPhase] = useState<Phase>('deal')
+  })
+  const [i, setI] = useSyncedState('imp.i', 0)
+  const [votes, setVoteField, resetVotes] = useSyncedMap<string>('imp.votes')
+  const [phase, setPhase] = useSyncedState<Phase>('imp.phase', 'deal')
   const viewer = secret.order[i]
   const counts: Record<string, number> = {}
   Object.values(votes).forEach((id) => {
@@ -31,15 +31,21 @@ export function ImpostorGame() {
     <div className="space-y-4">
       {phase === 'deal' && viewer && (
         <div className="card space-y-4 p-5 text-center">
-          <p className="text-sm text-white/60">Passe le téléphone à</p>
-          <p className="font-display text-3xl">{viewer.name}</p>
+          <p className="text-sm text-white/60">
+            {connected && selfId ? 'Regarde ton rôle' : 'Passe le téléphone à'}
+          </p>
+          <p className="font-display text-3xl">
+            {connected && selfId ? players.find((p) => p.id === selfId)?.name ?? viewer.name : viewer.name}
+          </p>
           <details className="rounded-xl bg-white/5 p-4 text-left">
             <summary className="cursor-pointer text-center text-sm text-fuchsia-200">Je suis seul(e), montrer</summary>
             <p className="mt-3 text-center font-display text-2xl normal-case tracking-normal">
-              {viewer.id === secret.impostorId ? 'Tu es l’IMPOSTEUR' : secret.word}
+              {(connected && selfId ? selfId : viewer.id) === secret.impostorId
+                ? 'Tu es l’IMPOSTEUR'
+                : secret.word}
             </p>
             <p className="mt-2 text-center text-xs text-white/45">
-              {viewer.id === secret.impostorId
+              {(connected && selfId ? selfId : viewer.id) === secret.impostorId
                 ? 'Devine le mot en écoutant les autres. Ne te fais pas griller.'
                 : 'Décris le mot sans le dire. Trouvez l’imposteur.'}
             </p>
@@ -76,7 +82,8 @@ export function ImpostorGame() {
                     <button
                       key={o.id}
                       type="button"
-                      onClick={() => setVotes((v) => ({ ...v, [p.id]: o.id }))}
+                      onClick={() => setVoteField(p.id, o.id)}
+                      disabled={!!connected && !!selfId && p.id !== selfId}
                       className={`rounded-full px-3 py-1 text-xs ${votes[p.id] === o.id ? 'bg-white text-black' : 'bg-white/10'}`}
                     >
                       {o.name}
@@ -116,7 +123,7 @@ export function ImpostorGame() {
               else players.filter((p) => p.id !== impostor.id).forEach((p) => addSips(p.id, 2))
               setRound((r) => r + 1)
               setI(0)
-              setVotes({})
+              resetVotes()
               setPhase('deal')
             }}
             className="btn-primary w-full justify-center"

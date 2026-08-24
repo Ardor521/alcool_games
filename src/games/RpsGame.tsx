@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useSyncedState } from '../lib/useSyncedState'
 import { useParty } from '../context/PartyContext'
 import { TurnBanner } from '../components/TurnBanner'
 import { SipButtons } from '../components/SipToast'
@@ -18,13 +18,13 @@ function winner(a: Move, b: Move) {
 }
 
 export function RpsGame() {
-  const { players, addSips } = useParty()
-  const [turn, setTurn] = useState(0)
+  const { players, addSips, selfId, connected } = useParty()
+  const [turn, setTurn] = useSyncedState('rps.turn', 0)
   const a = players[turn % Math.max(players.length, 1)]
   const b = players[(turn + 1) % Math.max(players.length, 1)]
-  const [pickA, setPickA] = useState<Move | null>(null)
-  const [pickB, setPickB] = useState<Move | null>(null)
-  const [msg, setMsg] = useState('Chacun choisit en secret.')
+  const [pickA, setPickA] = useSyncedState<Move | null>('rps.a', null)
+  const [pickB, setPickB] = useSyncedState<Move | null>('rps.b', null)
+  const [msg, setMsg] = useSyncedState('rps.msg', 'Chacun choisit en secret.')
 
   return (
     <div className="space-y-4">
@@ -41,6 +41,7 @@ export function RpsGame() {
                 key={m.id}
                 type="button"
                 onClick={() => setPickA(m.id)}
+                disabled={!!connected && !!selfId && selfId !== a?.id}
                 className={`rounded-xl px-2 py-2 text-xl ${pickA === m.id ? 'bg-white text-black' : 'bg-white/10'}`}
               >
                 {m.icon}
@@ -56,6 +57,7 @@ export function RpsGame() {
                 key={m.id}
                 type="button"
                 onClick={() => setPickB(m.id)}
+                disabled={!!connected && !!selfId && selfId !== b?.id}
                 className={`rounded-xl px-2 py-2 text-xl ${pickB === m.id ? 'bg-white text-black' : 'bg-white/10'}`}
               >
                 {m.icon}

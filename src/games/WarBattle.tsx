@@ -1,6 +1,7 @@
-import { useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import { motion } from 'framer-motion'
 import { useParty } from '../context/PartyContext'
+import { useSyncedMap, useSyncedState } from '../lib/useSyncedState'
 import { newDeck } from '../lib/cards'
 import { shuffle } from '../lib/utils'
 import type { PlayingCard } from '../types'
@@ -9,7 +10,7 @@ import { PlayerAvatar } from '../components/PlayerAvatar'
 import { WaterGlass } from '../components/WaterGlass'
 
 type Hand = { id: string; pile: PlayingCard[]; won: PlayingCard[]; streak: number; shields: number }
-type Phase = 'pick' | 'play' | 'war' | 'over'
+type Phase = 'pick' | 'ready' | 'play' | 'war' | 'over'
 
 function recycle(h: Hand): Hand {
   return h.pile.length > 0 || h.won.length === 0 ? h : { ...h, pile: shuffle(h.won), won: [] }
@@ -28,21 +29,21 @@ function warSips(diff: number, wars: number) {
 }
 
 export function WarBattle() {
-  const { players, addSips } = useParty()
-  const [idA, setIdA] = useState(players[0]?.id ?? '')
-  const [idB, setIdB] = useState(players[1]?.id ?? players[0]?.id ?? '')
-  const [handA, setHandA] = useState<Hand | null>(null)
-  const [handB, setHandB] = useState<Hand | null>(null)
-  const [phase, setPhase] = useState<Phase>('pick')
-  const [showA, setShowA] = useState<PlayingCard | null>(null)
-  const [showB, setShowB] = useState<PlayingCard | null>(null)
-  const [face, setFace] = useState(false)
-  const [busy, setBusy] = useState(false)
-  const [wars, setWars] = useState(0)
-  const [pot, setPot] = useState<PlayingCard[]>([])
-  const [msg, setMsg] = useState('Choisis 2 joueurs. Chacun reçoit un jeu de 52 cartes.')
-  const [log, setLog] = useState<string[]>([])
-  const [adjust, setAdjust] = useState<string | null>(null)
+  const { players, addSips, selfId, connected } = useParty()
+  const [idA, setIdA] = useSyncedState('war.idA', players[0]?.id ?? '')
+  const [idB, setIdB] = useSyncedState('war.idB', players[1]?.id ?? players[0]?.id ?? '')
+  const [handA, setHandA] = useSyncedState<Hand | null>('war.handA', null)
+  const [handB, setHandB] = useSyncedState<Hand | null>('war.handB', null)
+  const [phase, setPhase] = useSyncedState<Phase>('war.phase', 'pick')
+  const [showA, setShowA] = useSyncedState<PlayingCard | null>('war.showA', null)
+  const [showB, setShowB] = useSyncedState<PlayingCard | null>('war.showB', null)
+  const [face, setFace] = useSyncedState('war.face', false)
+  const [wars, setWars] = useSyncedState('war.wars', 0)
+  const [pot, setPot] = useSyncedState<PlayingCard[]>('war.pot', [])
+  const [msg, setMsg] = useSyncedState('war.msg', 'Choisis 2 joueurs. Chacun reçoit un jeu de 52 cartes.')
+  const [log, setLog] = useSyncedState<string[]>('war.log', [])
+  const [adjust, setAdjust] = useSyncedState<string | null>('war.adjust', null)
+  const [ready, setReadyField, resetReady] = useSyncedMap<boolean>('war.ready')
 
   const pA = players.find((p) => p.id === idA)
   const pB = players.find((p) => p.id === idB)
@@ -66,8 +67,9 @@ export function WarBattle() {
     setPot([])
     setAdjust(null)
     setLog([])
-    setPhase('play')
-    setMsg('Les cartes sont déjà sur la table. Tape Jouer pour les retourner.')
+    resetReady()
+    setPhase('ready')
+    setMsg('Chacun tape Prêt. Les deux cartes se retournent en même temps.')
   }
 
   const take = (h: Hand) => {
@@ -77,18 +79,14 @@ export function WarBattle() {
     return { card: c, next: { ...rec, pile: rest } }
   }
 
-  const reveal = (cA: PlayingCard | null, cB: PlayingCard | null, then: () => void) => {
-    setBusy(true)
-    setFace(false)
-    window.setTimeout(() => {
-      setShowA(cA)
-      setShowB(cB)
-      setFace(true)
-      window.setTimeout(() => {
-        then()
-        setBusy(false)
-      }, 380)
-    }, 320)
+  const flipNow = (cA: PlayingCard, cB: PlayingCard, nA: Hand, nB: Hand, potCards: PlayingCard[], warN: number) => {
+    setShowA(cA)
+    setShowB(cB)
+    setFace(true)
+    setHandA(nA)
+    setHandB(nB)
+    setPot(potCards)
+    resolve(cA, cB, nA, nB, potCards, warN)
   }
 
   const applyWin = (winner: Hand, loser: Hand, sips: number, extra?: string) => {
@@ -153,10 +151,13 @@ export function WarBattle() {
     setPot([])
     setWars(0)
     setPhase('play')
+    resetReady()
   }
 
-  const play = () => {
-    if (!handA || !handB || busy) return
+  const bothReady = !!(ready[idA] && ready[idB])
+
+  const drawRound = (isWar: boolean) => {
+    if (!handA || !handB) return
     let a = recycle(handA)
     let b = recycle(handB)
     if (count(a) === 0 || count(b) === 0) {
@@ -164,46 +165,38 @@ export function WarBattle() {
       setMsg('Plus de cartes : fin de partie.')
       return
     }
+    const buried: PlayingCard[] = []
+    if (isWar) {
+      for (let i = 0; i < 3; i += 1) {
+        const ta = take(a)
+        a = ta.next
+        if (ta.card) buried.push(ta.card)
+        const tb = take(b)
+        b = tb.next
+        if (tb.card) buried.push(tb.card)
+      }
+    }
     const ta = take(a)
     const tb = take(b)
     if (!ta.card || !tb.card) {
       setPhase('over')
-      return
-    }
-    const potCards = [ta.card, tb.card]
-    setPot(potCards)
-    setHandA(ta.next)
-    setHandB(tb.next)
-    reveal(ta.card, tb.card, () => resolve(ta.card!, tb.card!, ta.next, tb.next, potCards, 0))
-  }
-
-  const war = () => {
-    if (!handA || !handB || busy) return
-    let a = recycle(handA)
-    let b = recycle(handB)
-    const buried: PlayingCard[] = []
-    for (let i = 0; i < 3; i += 1) {
-      const ta = take(a)
-      a = ta.next
-      if (ta.card) buried.push(ta.card)
-      const tb = take(b)
-      b = tb.next
-      if (tb.card) buried.push(tb.card)
-    }
-    const fa = take(a)
-    const fb = take(b)
-    if (!fa.card || !fb.card) {
-      setHandA(a)
-      setHandB(b)
-      setPhase('over')
       setMsg('Plus assez de cartes pour la bataille.')
       return
     }
-    const potCards = [...pot, ...buried, fa.card, fb.card]
-    setPot(potCards)
-    setHandA(fa.next)
-    setHandB(fb.next)
-    reveal(fa.card, fb.card, () => resolve(fa.card!, fb.card!, fa.next, fb.next, potCards, wars))
+    const potCards = isWar ? [...pot, ...buried, ta.card, tb.card] : [ta.card, tb.card]
+    flipNow(ta.card, tb.card, ta.next, tb.next, potCards, isWar ? wars : 0)
+  }
+
+  const markReady = (id: string) => {
+    if (ready[id]) return
+    const nowBoth = (id === idA || !!ready[idA]) && (id === idB || !!ready[idB])
+    setReadyField(id, true)
+    if (nowBoth) {
+      window.setTimeout(() => {
+        drawRound(phase === 'war')
+        resetReady()
+      }, 120)
+    }
   }
 
   const badges = (h: Hand | null) => {
@@ -298,23 +291,47 @@ export function WarBattle() {
               )
             })}
           </div>
-          <div className="flex items-end justify-center gap-5 sm:gap-10">
-            <CardView card={showA} faceUp={face && !!showA} />
+          <div className="flex items-end justify-center gap-4 sm:gap-10">
+            <div className="text-center">
+              <p className="mb-1 text-[10px] uppercase text-white/40">{pA.name}</p>
+              <CardView
+                card={showA}
+                faceUp={face && !!showA}
+                small={connected && selfId === idB}
+              />
+            </div>
             <motion.div className="pb-10 font-display text-xl text-fuchsia-200">VS</motion.div>
-            <CardView card={showB} faceUp={face && !!showB} />
+            <div className="text-center">
+              <p className="mb-1 text-[10px] uppercase text-white/40">{pB.name}</p>
+              <CardView
+                card={showB}
+                faceUp={face && !!showB}
+                small={connected && selfId === idA}
+              />
+            </div>
           </div>
           {pot.length > 2 && <p className="text-center text-xs text-amber-200">En jeu : {pot.length} cartes</p>}
           <p className="text-center text-sm text-white/80">{msg}</p>
-          {phase === 'play' && (
-            <button type="button" disabled={busy} onClick={play} className="btn-primary w-full justify-center py-3 disabled:opacity-50">
-              {face ? 'Manche suivante (retourne ici)' : 'Retourner les cartes'}
-            </button>
+          {(phase === 'play' || phase === 'ready' || phase === 'war') && (
+            <div className="grid grid-cols-2 gap-2">
+              {[pA, pB].map((pl) => {
+                const mine = !connected || !selfId || selfId === pl.id
+                const isReady = !!ready[pl.id]
+                return (
+                  <button
+                    key={pl.id}
+                    type="button"
+                    disabled={!mine || isReady}
+                    onClick={() => markReady(pl.id)}
+                    className={`justify-center py-3 ${isReady ? 'btn-ghost opacity-70' : 'btn-primary'}`}
+                  >
+                    {isReady ? `${pl.name} prêt ✓` : mine ? `Prêt — ${pl.name}` : `En attente de ${pl.name}`}
+                  </button>
+                )
+              })}
+            </div>
           )}
-          {phase === 'war' && (
-            <button type="button" disabled={busy} onClick={war} className="btn-primary w-full justify-center py-3 disabled:opacity-50">
-              Relancer la bataille ici {wars > 1 ? `x${wars}` : ''}
-            </button>
-          )}
+          {bothReady && <p className="text-center text-xs text-fuchsia-200">Les deux sont prêts — révélation…</p>}
           {adjust && (
             <div className="card p-3">
               <p className="mb-2 text-xs text-white/50">Ajuster les gorgées</p>

@@ -1,4 +1,4 @@
-import { useSyncedState } from '../lib/useSyncedState'
+import { useSyncedMap, useSyncedState } from '../lib/useSyncedState'
 import { AnimatePresence, motion } from 'framer-motion'
 import { useParty } from '../context/PartyContext'
 import { NEVER_PROMPTS } from '../lib/catalog'
@@ -6,18 +6,17 @@ import { shuffle } from '../lib/utils'
 import { PlayerAvatar } from '../components/PlayerAvatar'
 
 export function NeverGame() {
-  const { players, addSips } = useParty()
+  const { players, addSips, selfId, connected } = useParty()
   const [deck] = useSyncedState('never.deck', () => shuffle(NEVER_PROMPTS))
   const [i, setI] = useSyncedState('never.i', 0)
-  const [drunk, setDrunk] = useSyncedState<Record<string, boolean>>('never.drunk', {})
+  const [drunk, setDrunkField, resetDrunk] = useSyncedMap<boolean>('never.drunk')
   const phrase = deck[i % deck.length]
 
   const tap = (id: string) => {
-    setDrunk((prev) => {
-      const next = { ...prev, [id]: !prev[id] }
-      if (!prev[id]) addSips(id, 1)
-      return next
-    })
+    if (connected && selfId && id !== selfId) return
+    if (drunk[id]) return
+    setDrunkField(id, true)
+    addSips(id, 1)
   }
 
   return (
@@ -32,7 +31,9 @@ export function NeverGame() {
         >
           <p className="text-xs uppercase tracking-[0.2em] text-fuchsia-300">Je n’ai jamais…</p>
           <p className="mt-3 font-display text-2xl leading-snug sm:text-3xl">{phrase}</p>
-          <p className="mt-4 text-sm text-white/55">Si tu l’as déjà fait, tape ton prénom. Tu bois 1 gorgée.</p>
+          <p className="mt-4 text-sm text-white/55">
+            Si tu l’as déjà fait, tape ton prénom. Tu bois 1 gorgée. Chacun clique chez soi — tout le monde voit.
+          </p>
         </motion.div>
       </AnimatePresence>
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
@@ -43,9 +44,10 @@ export function NeverGame() {
               key={p.id}
               type="button"
               onClick={() => tap(p.id)}
+              disabled={connected && !!selfId && p.id !== selfId}
               className={`card flex items-center gap-2 px-3 py-3 text-left transition ${
                 yes ? 'bg-amber-400/10 ring-2 ring-amber-300/70' : 'hover:bg-white/5'
-              }`}
+              } ${connected && selfId && p.id !== selfId ? 'opacity-70' : ''}`}
             >
               <PlayerAvatar player={p} size="sm" />
               <div className="min-w-0">
@@ -60,7 +62,7 @@ export function NeverGame() {
         type="button"
         onClick={() => {
           setI((x) => x + 1)
-          setDrunk({})
+          resetDrunk()
         }}
         className="btn-primary w-full justify-center py-3"
       >

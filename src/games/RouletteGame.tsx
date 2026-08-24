@@ -1,6 +1,7 @@
-import { useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import { motion } from 'framer-motion'
 import { useParty } from '../context/PartyContext'
+import { useSyncedState } from '../lib/useSyncedState'
 import { TurnBanner } from '../components/TurnBanner'
 
 type Slice = { label: string; sips: number; color: string }
@@ -17,12 +18,13 @@ function wheelBg(slices: Slice[]) {
 }
 
 export function RouletteGame() {
-  const { players, addSips } = useParty()
-  const [turn, setTurn] = useState(0)
-  const [spinning, setSpinning] = useState(false)
-  const [rot, setRot] = useState(0)
-  const [result, setResult] = useState<Slice | null>(null)
+  const { players, addSips, selfId, connected } = useParty()
+  const [turn, setTurn] = useSyncedState('rou.turn', 0)
+  const [spinning, setSpinning] = useSyncedState('rou.spin', false)
+  const [rot, setRot] = useSyncedState('rou.rot', 0)
+  const [result, setResult] = useSyncedState<Slice | null>('rou.result', null)
   const current = players[turn % Math.max(players.length, 1)]
+  const mySpin = !connected || !selfId || selfId === current?.id
   const slices = useMemo<Slice[]>(
     () => [
       { label: '1 gorgée', sips: 1, color: '#34d399' },
@@ -75,8 +77,8 @@ export function RouletteGame() {
             />
             <div className="pointer-events-none absolute inset-0 m-auto h-12 w-12 rounded-full bg-[#07020f] ring-4 ring-white/10 sm:h-16 sm:w-16" />
           </div>
-          <button type="button" onClick={spin} disabled={spinning} className="btn-primary w-full justify-center py-3 disabled:opacity-50">
-            {spinning ? 'La roue tourne…' : 'Lancer la roulette'}
+          <button type="button" onClick={spin} disabled={spinning || !mySpin} className="btn-primary w-full justify-center py-3 disabled:opacity-50">
+            {spinning ? 'La roue tourne…' : mySpin ? 'Lancer la roulette' : `Au tour de ${current?.name}`}
           </button>
         </div>
         <div className="card flex min-h-[220px] flex-col gap-3 p-3 sm:min-h-[280px] sm:p-4">
