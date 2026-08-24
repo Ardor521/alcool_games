@@ -4,6 +4,7 @@ import { useParty } from '../context/PartyContext'
 import { NEVER_PROMPTS } from '../lib/catalog'
 import { shuffle } from '../lib/utils'
 import { PlayerAvatar } from '../components/PlayerAvatar'
+import { HostOnly } from '../components/RoleGate'
 
 export function NeverGame() {
   const { players, addSips, selfId, connected } = useParty()
@@ -58,16 +59,18 @@ export function NeverGame() {
           )
         })}
       </div>
-      <button
-        type="button"
-        onClick={() => {
-          setI((x) => x + 1)
-          resetDrunk()
-        }}
-        className="btn-primary w-full justify-center py-3"
-      >
-        Phrase suivante
-      </button>
+      <HostOnly fallback={<p className="text-center text-xs text-white/40">L’hôte passe à la phrase suivante.</p>}>
+        <button
+          type="button"
+          onClick={() => {
+            setI((x) => x + 1)
+            resetDrunk()
+          }}
+          className="btn-primary w-full justify-center py-3"
+        >
+          Phrase suivante
+        </button>
+      </HostOnly>
     </div>
   )
 }

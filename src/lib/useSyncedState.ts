@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react'
+import { useCallback, useLayoutEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react'
 import { useRoom } from '../context/RoomContext'
 
 export function useSyncedState<T>(key: string, initial: T | (() => T)): [T, Dispatch<SetStateAction<T>>] {
@@ -6,9 +6,9 @@ export function useSyncedState<T>(key: string, initial: T | (() => T)): [T, Disp
   const initRef = useRef(typeof initial === 'function' ? (initial as () => T)() : initial)
   const [local, setLocal] = useState<T>(() => initRef.current)
   const hasKey = Object.prototype.hasOwnProperty.call(game, key)
-  const value = connected ? (hasKey ? (game[key] as T) : initRef.current) : local
+  const value = !connected ? local : hasKey ? (game[key] as T) : initRef.current
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (connected && isHost && !hasKey) {
       setGameKey(key, initRef.current)
     }

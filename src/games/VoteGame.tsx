@@ -5,6 +5,7 @@ import { VOTE_PROMPTS } from '../lib/catalog'
 import { shuffle } from '../lib/utils'
 import { PlayerAvatar } from '../components/PlayerAvatar'
 import { WaterGlass } from '../components/WaterGlass'
+import { HostOnly } from '../components/RoleGate'
 
 export function VoteGame() {
   const { players, addSips, selfId, connected } = useParty()
@@ -82,27 +83,31 @@ export function VoteGame() {
               <WaterGlass id="vote-water" size="sm" />
             </div>
           </div>
-          <button
-            type="button"
-            onClick={() => {
-              setI((x) => x + 1)
-              resetBallots()
-              setRevealed(false)
-            }}
-            className="btn-primary w-full justify-center py-3"
-          >
-            Question suivante
-          </button>
+          <HostOnly fallback={<p className="text-center text-xs text-white/40">L’hôte lance la question suivante.</p>}>
+            <button
+              type="button"
+              onClick={() => {
+                setI((x) => x + 1)
+                resetBallots()
+                setRevealed(false)
+              }}
+              className="btn-primary w-full justify-center py-3"
+            >
+              Question suivante
+            </button>
+          </HostOnly>
         </div>
       ) : (
-        <button
-          type="button"
-          disabled={total === 0}
-          onClick={() => setRevealed(true)}
-          className="btn-primary w-full justify-center py-3 disabled:opacity-40"
-        >
-          Révéler ({total} vote{total > 1 ? 's' : ''})
-        </button>
+        <HostOnly fallback={<p className="text-center text-xs text-white/40">En attente des votes — l’hôte révèle.</p>}>
+          <button
+            type="button"
+            disabled={total === 0}
+            onClick={() => setRevealed(true)}
+            className="btn-primary w-full justify-center py-3 disabled:opacity-40"
+          >
+            Révéler ({total} vote{total > 1 ? 's' : ''})
+          </button>
+        </HostOnly>
       )}
     </div>
   )

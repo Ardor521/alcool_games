@@ -1,6 +1,7 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import { motion } from 'framer-motion'
 import { useParty } from '../context/PartyContext'
+import { useRoom } from '../context/RoomContext'
 import { useSyncedMap, useSyncedState } from '../lib/useSyncedState'
 import { newDeck } from '../lib/cards'
 import { shuffle } from '../lib/utils'
@@ -30,6 +31,7 @@ function warSips(diff: number, wars: number) {
 
 export function WarBattle() {
   const { players, addSips, selfId, connected } = useParty()
+  const { isHost } = useRoom()
   const [idA, setIdA] = useSyncedState('war.idA', players[0]?.id ?? '')
   const [idB, setIdB] = useSyncedState('war.idB', players[1]?.id ?? players[0]?.id ?? '')
   const [handA, setHandA] = useSyncedState<Hand | null>('war.handA', null)
@@ -189,15 +191,20 @@ export function WarBattle() {
 
   const markReady = (id: string) => {
     if (ready[id]) return
-    const nowBoth = (id === idA || !!ready[idA]) && (id === idB || !!ready[idB])
     setReadyField(id, true)
-    if (nowBoth) {
-      window.setTimeout(() => {
-        drawRound(phase === 'war')
-        resetReady()
-      }, 120)
-    }
   }
+
+  const lastFlip = useRef('')
+  useEffect(() => {
+    if (connected && !isHost) return
+    if (!handA || !handB) return
+    if (!(ready[idA] && ready[idB])) return
+    const token = `${idA}-${idB}-${handA.pile.length}-${handB.pile.length}-${phase}`
+    if (lastFlip.current === token) return
+    lastFlip.current = token
+    drawRound(phase === 'war')
+    resetReady()
+  }, [ready, idA, idB, phase, connected, isHost])
 
   const badges = (h: Hand | null) => {
     if (!h) return []

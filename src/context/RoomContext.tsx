@@ -211,6 +211,7 @@ export function RoomProvider({ children }: { children: ReactNode }) {
   const connsRef = useRef<Map<string, DataConnection>>(new Map())
   const hostConnRef = useRef<DataConnection | null>(null)
   const peerPlayerRef = useRef<Map<string, string>>(new Map())
+  const queueRef = useRef<RoomAction[]>([])
   snapRef.current = snap
   hostRef.current = isHost
 
@@ -394,6 +395,9 @@ export function RoomProvider({ children }: { children: ReactNode }) {
           conn.on('open', () => {
             const me = makePlayer(trimmed, 9, selfId)
             conn.send({ t: 'hello', player: me } satisfies Wire)
+            const pending = queueRef.current
+            queueRef.current = []
+            pending.forEach((a) => conn.send({ t: 'action', a, from: selfId } satisfies Wire))
           })
           conn.on('data', (raw) => {
             const msg = raw as Wire
@@ -439,6 +443,7 @@ export function RoomProvider({ children }: { children: ReactNode }) {
     [destroyPeer, selfId],
   )
 
+
   const leaveRoom = useCallback(() => {
     const bye: Wire = { t: 'bye', id: selfId }
     if (hostConnRef.current?.open) hostConnRef.current.send(bye)
@@ -460,10 +465,16 @@ export function RoomProvider({ children }: { children: ReactNode }) {
   const dispatch = useCallback(
     (action: RoomAction) => {
       if (status !== 'connected') return
-      if (hostRef.current) applyAndPush(action)
-      else if (hostConnRef.current?.open) {
-        hostConnRef.current.send({ t: 'action', a: action, from: selfId } satisfies Wire)
+      if (hostRef.current) {
+        applyAndPush(action)
+        return
       }
+      const next = applyAction(snapRef.current, action)
+      snapRef.current = next
+      setSnap(next)
+      const conn = hostConnRef.current
+      if (conn?.open) conn.send({ t: 'action', a: action, from: selfId } satisfies Wire)
+      else queueRef.current.push(action)
     },
     [applyAndPush, selfId, status],
   )

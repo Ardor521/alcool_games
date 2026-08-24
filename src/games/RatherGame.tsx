@@ -3,6 +3,7 @@ import { useParty } from '../context/PartyContext'
 import { RATHER_PAIRS } from '../lib/catalog'
 import { shuffle } from '../lib/utils'
 import { SipButtons } from '../components/SipToast'
+import { HostOnly } from '../components/RoleGate'
 
 export function RatherGame() {
   const { players, addSips, selfId, connected } = useParty()
@@ -70,26 +71,30 @@ export function RatherGame() {
               <SipButtons onSip={(n) => addSips(p.id, n)} />
             </div>
           ))}
-          <button
-            type="button"
-            onClick={() => {
-              minority.forEach((p) => addSips(p.id, 2))
-              next()
-            }}
-            className="btn-primary w-full justify-center"
-          >
-            +2 à la minorité & suivant
-          </button>
+          <HostOnly fallback={<p className="text-center text-xs text-white/40">L’hôte passe à la suite.</p>}>
+            <button
+              type="button"
+              onClick={() => {
+                minority.forEach((p) => addSips(p.id, 2))
+                next()
+              }}
+              className="btn-primary w-full justify-center"
+            >
+              +2 à la minorité & suivant
+            </button>
+          </HostOnly>
         </div>
       ) : (
-        <button
-          type="button"
-          disabled={Object.keys(votes).length < players.length}
-          onClick={() => setRevealed(true)}
-          className="btn-primary w-full justify-center py-3 disabled:opacity-40"
-        >
-          Révéler
-        </button>
+        <HostOnly fallback={<p className="text-center text-xs text-white/40">Chacun vote — l’hôte révèle.</p>}>
+          <button
+            type="button"
+            disabled={Object.keys(votes).length < players.length}
+            onClick={() => setRevealed(true)}
+            className="btn-primary w-full justify-center py-3 disabled:opacity-40"
+          >
+            Révéler
+          </button>
+        </HostOnly>
       )}
     </div>
   )

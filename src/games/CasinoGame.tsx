@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import { useParty } from '../context/PartyContext'
+import { useRoom } from '../context/RoomContext'
 import { useSyncedState } from '../lib/useSyncedState'
 import type { Player } from '../types'
 import { PlayerAvatar } from '../components/PlayerAvatar'
@@ -14,17 +15,19 @@ function colorOf(n: number) {
   return n === 0 ? 'green' : REDS.has(n) ? 'red' : 'black'
 }
 
-function luckyNumbers(players: Player[]) {
-  const nums = Array.from({ length: 36 }, (_, i) => i + 1)
-  for (let i = nums.length - 1; i > 0; i -= 1) {
+function luckyNumbers(players: Player[], previous: Record<string, number[]> = {}) {
+  const map: Record<string, number[]> = { ...previous }
+  const used = new Set<number>()
+  Object.values(map).forEach((arr) => arr.forEach((n) => used.add(n)))
+  const pool = Array.from({ length: 36 }, (_, i) => i + 1).filter((n) => !used.has(n))
+  for (let i = pool.length - 1; i > 0; i -= 1) {
     const j = Math.floor(Math.random() * (i + 1))
-    ;[nums[i], nums[j]] = [nums[j], nums[i]]
+    ;[pool[i], pool[j]] = [pool[j], pool[i]]
   }
-  const per = Math.max(1, Math.floor(36 / Math.max(players.length, 1)))
-  const map: Record<string, number[]> = {}
-  players.forEach((p, i) => {
-    const slice = nums.slice(i * per, Math.min(nums.length, (i + 1) * per))
-    map[p.id] = [...slice].sort((a, b) => a - b)
+  const missing = players.filter((p) => !map[p.id] || map[p.id].length === 0)
+  const per = Math.max(1, Math.floor(pool.length / Math.max(missing.length, 1)))
+  missing.forEach((p, i) => {
+    map[p.id] = pool.slice(i * per, Math.min(pool.length, (i + 1) * per)).sort((a, b) => a - b)
   })
   return map
 }
@@ -197,27 +200,44 @@ const FILL = { red: '#dc2626', black: '#0f172a', green: '#16a34a' }
 
 export function CasinoGame() {
   const { players, addSips, selfId, connected } = useParty()
+  const { isHost } = useRoom()
   const [turn, setTurn] = useSyncedState('casino.turn', 0)
   const [spinning, setSpinning] = useSyncedState('casino.spin', false)
   const [rot, setRot] = useSyncedState('casino.rot', 0)
   const [result, setResult] = useSyncedState<Result | null>('casino.result', null)
+  const [spinIdx, setSpinIdx] = useSyncedState('casino.idx', -1)
+  const [spinToken, setSpinToken] = useSyncedState('casino.token', 0)
   const [showRules, setShowRules] = useState(false)
-  const [lucky] = useSyncedState('casino.lucky', () => luckyNumbers(players))
+  const [lucky, setLucky] = useSyncedState<Record<string, number[]>>('casino.lucky', () => luckyNumbers(players))
   const croupier = players[turn % Math.max(players.length, 1)]
   const mySpin = !connected || !selfId || selfId === croupier?.id
 
+  useEffect(() => {
+    if (connected && !isHost) return
+    const missing = players.some((p) => !lucky[p.id] || lucky[p.id].length === 0)
+    if (missing) setLucky((prev) => luckyNumbers(players, prev))
+  }, [players, lucky, setLucky, connected, isHost])
+
   const spin = () => {
-    if (spinning || !croupier) return
-    setSpinning(true)
-    setResult(null)
+    if (spinning || !croupier || !mySpin) return
     const idx = Math.floor(Math.random() * WHEEL.length)
     const extra = 8 * 360 - (idx * STEP + STEP / 2)
+    setResult(null)
+    setSpinIdx(idx)
+    setSpinToken((t) => t + 1)
     setRot((prev) => prev + extra - (((prev % 360) + 360) % 360))
-    window.setTimeout(() => {
-      setResult(resolve(WHEEL[idx], players, croupier.id, lucky))
+    setSpinning(true)
+  }
+
+  useEffect(() => {
+    if (connected && !isHost) return
+    if (!spinning || spinIdx < 0 || !croupier) return
+    const t = window.setTimeout(() => {
+      setResult(resolve(WHEEL[spinIdx], players, croupier.id, lucky))
       setSpinning(false)
     }, 4200)
-  }
+    return () => window.clearTimeout(t)
+  }, [spinning, spinIdx, spinToken, croupier?.id, connected, isHost])
 
   const apply = (giveTo?: string) => {
     if (!result) return

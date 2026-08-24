@@ -92,10 +92,10 @@ export function GameShell({
       {connected && (
         <p className="text-center text-[11px] uppercase tracking-widest text-white/40">
           {isHost
-            ? 'Hôte — tes actions et celles des joueurs se synchronisent.'
+            ? 'Hôte — tu lances les jeux et tu avances les questions.'
             : myTurn
-              ? 'C’est à toi. Tes clics passent sur tous les écrans.'
-              : 'Joue ta part. La table se met à jour en direct.'}
+              ? 'C’est à toi. Ton écran pilote le tour.'
+              : 'Tu vois la table. Clique quand c’est ton tour ou ta réponse.'}
         </p>
       )}
 

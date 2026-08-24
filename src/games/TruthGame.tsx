@@ -5,6 +5,7 @@ import { TRUTH_CARDS } from '../lib/catalog'
 import { shuffle } from '../lib/utils'
 import { TurnBanner } from '../components/TurnBanner'
 import { SipButtons } from '../components/SipToast'
+import { TurnOnly } from '../components/RoleGate'
 
 export function TruthGame() {
   const { players, addSips } = useParty()
@@ -73,6 +74,7 @@ export function TruthGame() {
             </div>
           </motion.div>
         ) : (
+          <TurnOnly extraIds={[current?.id]} fallback={<p className="card p-6 text-center text-sm text-white/55">En attente du choix de {current?.name}…</p>}>
           <motion.div
             key="choice"
             initial={{ opacity: 0 }}
@@ -91,6 +93,7 @@ export function TruthGame() {
               <p className="mt-2 text-sm text-white/55">Défi. Refus = cul sec (ou 4 gorgées).</p>
             </button>
           </motion.div>
+          </TurnOnly>
         )}
       </AnimatePresence>
     </div>
