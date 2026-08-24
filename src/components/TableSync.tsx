@@ -2,11 +2,12 @@ import { useEffect, useRef } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useRoom } from '../context/RoomContext'
 import { defaultControl } from '../lib/control'
+import { isBrowsePath } from '../lib/tableNav'
 
 export function TableSync() {
   const { pathname } = useLocation()
   const navigate = useNavigate()
-  const { connected, isHost, path, followTable, dispatch } = useRoom()
+  const { connected, isHost, path, dispatch } = useRoom()
   const lastSent = useRef('')
 
   useEffect(() => {
@@ -22,8 +23,9 @@ export function TableSync() {
   useEffect(() => {
     if (!connected || isHost || !path) return
     if (path === pathname) return
+    if (isBrowsePath(pathname)) return
     navigate(path)
-  }, [connected, isHost, followTable, path, pathname, navigate])
+  }, [connected, isHost, path, pathname, navigate])
 
   return null
 }

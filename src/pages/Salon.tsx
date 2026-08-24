@@ -6,6 +6,7 @@ import { useParty } from '../context/PartyContext'
 import { PlayerAvatar } from '../components/PlayerAvatar'
 import { WaterGlass } from '../components/WaterGlass'
 import { normalizeRoomCode } from '../lib/roomCode'
+import { PlayNowBar } from '../components/PlayNowBar'
 
 export function Salon() {
   const navigate = useNavigate()
@@ -126,18 +127,18 @@ export function Salon() {
 
         {!room.isHost && (
           <p className="card p-4 text-sm text-white/70">
-            L’hôte choisit le jeu. Ton écran suit la table. Tu joues seulement quand c’est ton tour.
+            Balade-toi dans Joueurs, Jeux ou Stats. Reviens à la table avec « Partie en cours ».
           </p>
         )}
 
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {room.isHost ? (
             <Link to="/jeux" className="btn-primary flex-1 justify-center">
               Lancer un jeu
             </Link>
           ) : (
-            <div className="btn-ghost flex-1 justify-center opacity-60">
-              En attente de l’hôte…
+            <div className="flex flex-1 justify-center">
+              <PlayNowBar />
             </div>
           )}
           <button type="button" onClick={room.leaveRoom} className="btn-ghost text-rose-200">

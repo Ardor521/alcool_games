@@ -36,7 +36,7 @@ export function Games() {
         </div>
         <p className="mt-1 text-sm text-white/60">
           {connected && !isHost
-            ? `Seul l’hôte (${hostName || 'table'}) choisit le jeu. Tu suis la table.`
+            ? `Tu peux parcourir le catalogue. Seul l’hôte (${hostName || 'table'}) lance un jeu.`
             : activePlayers.length < 2
               ? 'Ajoute au moins 2 joueurs actifs avant de lancer une partie.'
               : `${activePlayers.length} joueurs actifs · ${list.length} jeu${list.length > 1 ? 'x' : ''}`}
@@ -114,7 +114,7 @@ export function Games() {
                   </p>
                   <p className="text-sm text-white/55">{g.description}</p>
                   {connected && !isHost && (
-                    <p className="pt-1 text-xs text-fuchsia-200">En attente de l’hôte…</p>
+                    <p className="pt-1 text-xs text-fuchsia-200">Consultation — l’hôte lance le jeu</p>
                   )}
                   {missing && !(connected && !isHost) && (
                     <p className="pt-1 text-xs text-amber-200">

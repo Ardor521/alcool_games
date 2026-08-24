@@ -233,8 +233,10 @@ export function CasinoGame() {
     if (connected && !isHost) return
     if (!spinning || spinIdx < 0 || !croupier) return
     const t = window.setTimeout(() => {
-      setResult(resolve(WHEEL[spinIdx], players, croupier.id, lucky))
+      const next = resolve(WHEEL[spinIdx], players, croupier.id, lucky)
+      setResult(next)
       setSpinning(false)
+      if (!next.relance) setTurn((n) => n + 1)
     }, 4200)
     return () => window.clearTimeout(t)
   }, [spinning, spinIdx, spinToken, croupier?.id, connected, isHost])
@@ -248,12 +250,15 @@ export function CasinoGame() {
       return
     }
     setResult(null)
-    setTurn((t) => t + 1)
   }
 
   return (
     <div className="space-y-4">
-      <TurnBanner playerId={croupier?.id} label="Croupier / tour de" hint="C’est toi qui lances la boule." />
+      <TurnBanner
+        playerId={croupier?.id}
+        label={`Lancer ${turn + 1} · croupier`}
+        hint={mySpin ? 'C’est toi qui lances la boule.' : `Prochain lancer : ${croupier?.name}`}
+      />
       <div className="flex items-center justify-end">
         <button type="button" onClick={() => setShowRules((v) => !v)} className="text-xs text-emerald-300 underline">
           {showRules ? 'Masquer les règles' : 'Voir les règles'}

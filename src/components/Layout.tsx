@@ -1,14 +1,15 @@
 import { Link, Outlet, useLocation } from 'react-router-dom'
-import { GlassWater, House, Radio, Trophy, Users } from 'lucide-react'
+import { GlassWater, House, Trophy, Users } from 'lucide-react'
 import { useParty } from '../context/PartyContext'
 import { WaterGlass } from './WaterGlass'
 import { OwnerZip } from './OwnerZip'
 import { RoomBar } from './RoomBar'
+import { PlayNowBar } from './PlayNowBar'
 import { TableSync } from './TableSync'
 
 const NAV = [
   { to: '/', icon: House, label: 'Accueil' },
-  { to: '/salon', icon: Radio, label: 'Salon' },
+  { to: '/joueurs', icon: Users, label: 'Joueurs' },
   { to: '/jeux', icon: GlassWater, label: 'Jeux' },
   { to: '/stats', icon: Trophy, label: 'Stats' },
 ]
@@ -36,6 +37,7 @@ export function Layout() {
             <OwnerZip compact />
           </div>
           <div className="flex items-center gap-2">
+            <PlayNowBar />
             <RoomBar />
             <WaterGlass id="nav-header" size="sm" />
             <Link
@@ -73,9 +75,7 @@ export function Layout() {
                 ? pathname === '/'
                 : item.to === '/jeux'
                   ? pathname === '/jeux' || pathname.startsWith('/jeu/')
-                  : item.to === '/salon'
-                    ? pathname === '/salon' || pathname.startsWith('/joueurs')
-                    : pathname === item.to || pathname.startsWith(`${item.to}/`)
+                  : pathname === item.to || pathname.startsWith(`${item.to}/`)
             const Icon = item.icon
             return (
               <Link

@@ -40,7 +40,7 @@ export function RouletteGame() {
   )
 
   const spin = () => {
-    if (spinning) return
+    if (spinning || !mySpin) return
     setSpinning(true)
     setResult(null)
     const idx = Math.floor(Math.random() * slices.length)
@@ -50,6 +50,7 @@ export function RouletteGame() {
     window.setTimeout(() => {
       setResult(slices[idx])
       setSpinning(false)
+      setTurn((t) => t + 1)
     }, 3200)
   }
 
@@ -59,7 +60,6 @@ export function RouletteGame() {
     else if (result.sips < 0 && giveTo) addSips(giveTo, Math.abs(result.sips))
     else if (result.sips > 0 && result.sips < 99) addSips(current.id, result.sips === 5 ? 4 : result.sips)
     setResult(null)
-    setTurn((t) => t + 1)
   }
 
   return (
