@@ -3,6 +3,7 @@ import { motion } from 'framer-motion'
 import { useParty } from '../context/PartyContext'
 import { useRoom } from '../context/RoomContext'
 import { useSyncedState } from '../lib/useSyncedState'
+import { nextPlayerId, playerByTurn } from '../lib/turns'
 import type { Player } from '../types'
 import { PlayerAvatar } from '../components/PlayerAvatar'
 import { TurnBanner } from '../components/TurnBanner'
@@ -201,7 +202,7 @@ const FILL = { red: '#dc2626', black: '#0f172a', green: '#16a34a' }
 export function CasinoGame() {
   const { players, addSips, selfId, connected } = useParty()
   const { isHost } = useRoom()
-  const [turn, setTurn] = useSyncedState('casino.turn', 0)
+  const [turnId, setTurnId] = useSyncedState<string | null>('casino.turnId', players[0]?.id ?? null)
   const [spinning, setSpinning] = useSyncedState('casino.spin', false)
   const [rot, setRot] = useSyncedState('casino.rot', 0)
   const [result, setResult] = useSyncedState<Result | null>('casino.result', null)
@@ -212,10 +213,10 @@ export function CasinoGame() {
   const [lucky, setLucky] = useSyncedState<Record<string, number[]>>('casino.lucky', () =>
     connected && !isHost ? {} : luckyNumbers(players),
   )
-  const n = Math.max(players.length, 1)
-  const croupier = players[turn % n]
+  const croupier = playerByTurn(players, turnId)
   const spinner = players.find((p) => p.id === spinnerId) ?? croupier
   const mySpin = !connected || !selfId || selfId === croupier?.id
+  const next = players.find((p) => p.id === nextPlayerId(players, croupier?.id))
 
   useEffect(() => {
     if (connected && !isHost) return
@@ -260,14 +261,14 @@ export function CasinoGame() {
       return
     }
     setResult(null)
-    setTurn((Number(turn) + 1) % n)
+    setTurnId(nextPlayerId(players, croupier?.id))
   }
 
   return (
     <div className="space-y-4">
       <TurnBanner
         playerId={croupier?.id}
-        label={`Lancer ${turn + 1} · croupier`}
+        label={`Croupier · ${croupier?.name ?? ''}`}
         hint={mySpin ? 'C’est toi qui lances la boule.' : `Prochain lancer : ${croupier?.name}`}
       />
       <div className="flex items-center justify-end">
@@ -390,7 +391,7 @@ export function CasinoGame() {
                 <button type="button" onClick={() => apply()} className="btn-primary mt-auto w-full justify-center !py-2 text-sm">
                   {result.relance
                     ? 'Relancer'
-                    : `Valider & suivant${players[(Number(turn) + 1) % n] ? ` → ${players[(Number(turn) + 1) % n].name}` : ''}`}
+                    : `Valider & suivant${next ? ` → ${next.name}` : ''}`}
                 </button>
               )}
               <WaterGlass id="casino-panel" size="sm" className="self-end" />

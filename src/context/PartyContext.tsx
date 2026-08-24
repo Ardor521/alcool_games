@@ -180,8 +180,12 @@ export function PartyProvider({ children }: { children: ReactNode }) {
 
   const setActiveTurnId = useCallback(
     (id: string | null) => {
-      if (connected) room.dispatch({ type: 'turn', id })
-      else setLocalTurn(id)
+      if (connected) {
+        if (room.turnId === id) return
+        room.dispatch({ type: 'turn', id })
+      } else {
+        setLocalTurn((prev) => (prev === id ? prev : id))
+      }
     },
     [connected, room],
   )

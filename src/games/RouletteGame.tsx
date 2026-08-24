@@ -3,6 +3,7 @@ import { motion } from 'framer-motion'
 import { useParty } from '../context/PartyContext'
 import { useRoom } from '../context/RoomContext'
 import { useSyncedState } from '../lib/useSyncedState'
+import { nextPlayerId, playerByTurn } from '../lib/turns'
 import { TurnBanner } from '../components/TurnBanner'
 
 type Slice = { label: string; sips: number; color: string }
@@ -21,17 +22,17 @@ function wheelBg(slices: Slice[]) {
 export function RouletteGame() {
   const { players, addSips, selfId, connected } = useParty()
   const { isHost } = useRoom()
-  const n = Math.max(players.length, 1)
-  const [turn, setTurn] = useSyncedState('rou.turn', 0)
+  const [turnId, setTurnId] = useSyncedState<string | null>('rou.turnId', players[0]?.id ?? null)
   const [spinning, setSpinning] = useSyncedState('rou.spin', false)
   const [rot, setRot] = useSyncedState('rou.rot', 0)
   const [result, setResult] = useSyncedState<Slice | null>('rou.result', null)
   const [spinIdx, setSpinIdx] = useSyncedState('rou.idx', -1)
   const [token, setToken] = useSyncedState('rou.token', 0)
   const [spinnerId, setSpinnerId] = useSyncedState<string | null>('rou.spinner', null)
-  const current = players[turn % n]
+  const current = playerByTurn(players, turnId)
   const spinner = players.find((p) => p.id === spinnerId) ?? current
   const mySpin = !connected || !selfId || selfId === current?.id
+  const next = players.find((p) => p.id === nextPlayerId(players, current?.id))
   const slices = useMemo<Slice[]>(
     () => [
       { label: '1 gorgée', sips: 1, color: '#34d399' },
@@ -67,23 +68,22 @@ export function RouletteGame() {
       setSpinning(false)
     }, 3200)
     return () => window.clearTimeout(t)
-  }, [spinning, spinIdx, token, n, connected, isHost])
+  }, [spinning, spinIdx, token, connected, isHost])
 
   const apply = (giveTo?: string) => {
     if (!result || !spinner) return
     if (result.sips === 99) players.forEach((p) => addSips(p.id, 1))
     else if (result.sips < 0 && giveTo) addSips(giveTo, Math.abs(result.sips))
     else if (result.sips > 0 && result.sips < 99) addSips(spinner.id, result.sips === 5 ? 4 : result.sips)
-    const nextTurn = (Number(turn) + 1) % n
     setResult(null)
-    setTurn(nextTurn)
+    setTurnId(nextPlayerId(players, current?.id))
   }
 
   return (
     <div className="space-y-4">
       <TurnBanner
         playerId={current?.id}
-        label={`Lancer ${turn + 1} · ${current?.name ?? ''}`}
+        label={`Tour de ${current?.name ?? ''}`}
         hint={mySpin ? 'C’est toi qui lances.' : `Au tour de ${current?.name}`}
       />
       <div className="grid grid-cols-1 items-start gap-3 sm:grid-cols-[minmax(0,1.05fr)_minmax(150px,1fr)] sm:gap-2">
@@ -133,8 +133,7 @@ export function RouletteGame() {
                 </div>
               ) : (
                 <button type="button" onClick={() => apply()} className="btn-primary mt-auto w-full justify-center !py-2 text-sm">
-                  Valider & suivant
-                  {players[(Number(turn) + 1) % n] ? ` → ${players[(Number(turn) + 1) % n].name}` : ''}
+                  Valider & suivant{next ? ` → ${next.name}` : ''}
                 </button>
               )}
             </motion.div>

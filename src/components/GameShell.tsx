@@ -46,28 +46,20 @@ export function GameShell({
         <WaterGlass id={`shell-${game.id}`} size="sm" className="absolute right-2 top-2" />
       </div>
 
-      <div className="flex gap-2 overflow-x-auto pb-1">
+      <div className="flex h-11 items-center gap-2 overflow-x-auto overflow-y-hidden">
         {activePlayers.map((p) => (
           <div
             key={p.id}
-            className={`flex shrink-0 items-center gap-2 rounded-full border px-2 py-1 ${
+            className={`flex h-9 shrink-0 items-center gap-1.5 rounded-full border px-2 ${
               activeTurnId === p.id
-                ? 'border-white bg-white text-black shadow-[0_0_16px_rgba(255,255,255,0.25)]'
+                ? 'border-white bg-white text-black'
                 : 'border-white/10 bg-white/5'
             }`}
           >
             <PlayerAvatar player={p} size="sm" />
-            <span className="text-xs font-medium">{p.name}</span>
-            {p.id === selfId && (
-              <span className="rounded-full bg-fuchsia-500 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-white">
-                toi
-              </span>
-            )}
-            {activeTurnId === p.id && (
-              <span className="rounded-full bg-black px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-white">
-                tour
-              </span>
-            )}
+            <span className="max-w-[4.5rem] truncate text-xs font-medium">{p.name}</span>
+            {p.id === selfId && <span className="text-[9px] font-bold uppercase opacity-70">toi</span>}
+            {activeTurnId === p.id && <span className="text-[9px] font-bold uppercase opacity-70">tour</span>}
             <span className={`text-[10px] ${activeTurnId === p.id ? 'text-amber-700' : 'text-amber-200/80'}`}>
               {p.sips}
             </span>
@@ -90,7 +82,7 @@ export function GameShell({
       </div>
 
       {connected && (
-        <p className="text-center text-[11px] uppercase tracking-widest text-white/40">
+        <p className="h-4 text-center text-[11px] uppercase tracking-widest text-white/40">
           {isHost
             ? 'Hôte — tu lances les jeux et tu avances les questions.'
             : myTurn

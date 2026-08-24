@@ -15,8 +15,7 @@ export function TurnBanner({
   const player = players.find((p) => p.id === playerId) ?? players[0]
 
   useEffect(() => {
-    setActiveTurnId(player?.id ?? null)
-    return () => setActiveTurnId(null)
+    if (player?.id) setActiveTurnId(player.id)
   }, [player?.id, setActiveTurnId])
 
   if (!player) return null
