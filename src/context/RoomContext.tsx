@@ -48,7 +48,7 @@ type Wire =
   | { t: 'action'; a: RoomAction; from: string }
   | { t: 'state'; s: Snapshot }
   | { t: 'bye'; id: string }
-  | { t: 'ping' }
+  | { t: 'ping'; v?: number }
 
 type Status = 'idle' | 'connecting' | 'connected' | 'error'
 
@@ -269,7 +269,7 @@ export function RoomProvider({ children }: { children: ReactNode }) {
             if (conn.open) conn.send({ t: 'state', s: snapRef.current })
           }, 40)
         } else if (msg.t === 'ping') {
-          if (conn.open) conn.send({ t: 'state', s: snapRef.current })
+          if (conn.open && (msg.v ?? -1) !== snapRef.current.v) conn.send({ t: 'state', s: snapRef.current })
         } else if (msg.t === 'action') {
           const actor = peerPlayerRef.current.get(conn.peer) ?? msg.from
           const snap = snapRef.current
@@ -319,6 +319,8 @@ export function RoomProvider({ children }: { children: ReactNode }) {
           config: {
             iceServers: [
               { urls: 'stun:stun.l.google.com:19302' },
+              { urls: 'stun:stun1.l.google.com:19302' },
+              { urls: 'stun:stun.cloudflare.com:3478' },
               { urls: 'stun:global.stun.twilio.com:3478' },
             ],
           },
@@ -378,6 +380,8 @@ export function RoomProvider({ children }: { children: ReactNode }) {
           config: {
             iceServers: [
               { urls: 'stun:stun.l.google.com:19302' },
+              { urls: 'stun:stun1.l.google.com:19302' },
+              { urls: 'stun:stun.cloudflare.com:3478' },
               { urls: 'stun:global.stun.twilio.com:3478' },
             ],
           },
@@ -403,6 +407,7 @@ export function RoomProvider({ children }: { children: ReactNode }) {
             const msg = raw as Wire
             if (msg.t === 'state') {
               if (!msg.s) return
+              if (snapRef.current.v && msg.s.v < snapRef.current.v) return
               window.clearTimeout(t)
               hostRef.current = false
               setIsHost(false)
@@ -498,8 +503,10 @@ export function RoomProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (status !== 'connected' || isHost) return
     const t = window.setInterval(() => {
-      if (hostConnRef.current?.open) hostConnRef.current.send({ t: 'ping' } satisfies Wire)
-    }, 2500)
+      if (hostConnRef.current?.open) {
+        hostConnRef.current.send({ t: 'ping', v: snapRef.current.v } satisfies Wire)
+      }
+    }, 4000)
     return () => window.clearInterval(t)
   }, [status, isHost])
 

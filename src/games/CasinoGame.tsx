@@ -207,19 +207,25 @@ export function CasinoGame() {
   const [result, setResult] = useSyncedState<Result | null>('casino.result', null)
   const [spinIdx, setSpinIdx] = useSyncedState('casino.idx', -1)
   const [spinToken, setSpinToken] = useSyncedState('casino.token', 0)
+  const [spinnerId, setSpinnerId] = useSyncedState<string | null>('casino.spinner', null)
   const [showRules, setShowRules] = useState(false)
-  const [lucky, setLucky] = useSyncedState<Record<string, number[]>>('casino.lucky', () => luckyNumbers(players))
-  const croupier = players[turn % Math.max(players.length, 1)]
+  const [lucky, setLucky] = useSyncedState<Record<string, number[]>>('casino.lucky', () =>
+    connected && !isHost ? {} : luckyNumbers(players),
+  )
+  const n = Math.max(players.length, 1)
+  const croupier = players[turn % n]
+  const spinner = players.find((p) => p.id === spinnerId) ?? croupier
   const mySpin = !connected || !selfId || selfId === croupier?.id
 
   useEffect(() => {
     if (connected && !isHost) return
     const missing = players.some((p) => !lucky[p.id] || lucky[p.id].length === 0)
-    if (missing) setLucky((prev) => luckyNumbers(players, prev))
-  }, [players, lucky, setLucky, connected, isHost])
+    if (missing) setLucky((prev) => luckyNumbers(players, prev ?? {}))
+  }, [players.map((p) => p.id).join(','), connected, isHost])
 
   const spin = () => {
     if (spinning || !croupier || !mySpin) return
+    setSpinnerId(croupier.id)
     const idx = Math.floor(Math.random() * WHEEL.length)
     const extra = 8 * 360 - (idx * STEP + STEP / 2)
     setResult(null)
@@ -233,10 +239,9 @@ export function CasinoGame() {
     if (connected && !isHost) return
     if (!spinning || spinIdx < 0 || !croupier) return
     const t = window.setTimeout(() => {
-      const next = resolve(WHEEL[spinIdx], players, croupier.id, lucky)
+      const next = resolve(WHEEL[spinIdx], players, spinner?.id ?? croupier.id, lucky)
       setResult(next)
       setSpinning(false)
-      if (!next.relance) setTurn((n) => n + 1)
     }, 4200)
     return () => window.clearTimeout(t)
   }, [spinning, spinIdx, spinToken, croupier?.id, connected, isHost])
@@ -250,6 +255,7 @@ export function CasinoGame() {
       return
     }
     setResult(null)
+    setTurn((v) => (Number(v) + 1) % n)
   }
 
   return (
@@ -274,7 +280,7 @@ export function CasinoGame() {
           ))}
         </div>
       )}
-      <div className="grid grid-cols-[minmax(0,1.05fr)_minmax(150px,1fr)] items-start gap-2 sm:gap-3">
+      <div className="grid grid-cols-1 items-start gap-3 sm:grid-cols-[minmax(0,1.05fr)_minmax(150px,1fr)] sm:gap-2">
         <div className="min-w-0 space-y-3">
           <div className="relative w-full">
             <div className="absolute left-1/2 top-0 z-20 -translate-x-1/2 text-amber-300 drop-shadow">▼</div>
@@ -367,7 +373,7 @@ export function CasinoGame() {
                   </p>
                   <div className="flex flex-wrap gap-1.5">
                     {players
-                      .filter((p) => p.id !== croupier?.id)
+                      .filter((p) => p.id !== spinner?.id)
                       .map((p) => (
                         <button key={p.id} type="button" onClick={() => apply(p.id)} className="btn-ghost !px-2 !py-1 text-xs">
                           {p.name}

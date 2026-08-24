@@ -8,6 +8,7 @@ import { SUGGESTED_NAMES } from '../lib/catalog'
 import { PlayerAvatar } from '../components/PlayerAvatar'
 import { SipBadge } from '../components/SipToast'
 import { WaterGlass } from '../components/WaterGlass'
+import { PlayNowBar } from '../components/PlayNowBar'
 
 export function Players() {
   const { allPlayers, addPlayer, removePlayer, clearPlayers, resetSips, togglePause, players, selfId, connected } =
@@ -33,6 +34,11 @@ export function Players() {
           <h1 className="font-display text-3xl">Les joueurs</h1>
           <WaterGlass id="players-title" size="sm" />
         </div>
+        {connected && (
+          <div className="mb-3">
+            <PlayNowBar block />
+          </div>
+        )}
         <p className="mt-1 text-sm text-white/60">
           {connected
             ? 'Les joueurs du salon apparaissent ici en direct. Pause s’il arrête de boire.'

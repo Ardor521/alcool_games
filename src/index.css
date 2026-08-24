@@ -5,9 +5,15 @@
 }
 
 html,
-body,
+body {
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
 #root {
-  min-height: 100%;
+  height: 100%;
+  overflow: hidden;
 }
 
 body {
@@ -18,6 +24,8 @@ body {
     radial-gradient(900px 500px at 100% 0, #22d3ee1f, #0000 50%),
     #07020f;
   margin: 0;
+  padding: 0;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .font-display {

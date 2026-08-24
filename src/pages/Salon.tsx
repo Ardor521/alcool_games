@@ -137,8 +137,8 @@ export function Salon() {
               Lancer un jeu
             </Link>
           ) : (
-            <div className="flex flex-1 justify-center">
-              <PlayNowBar />
+            <div className="flex-1">
+              <PlayNowBar block />
             </div>
           )}
           <button type="button" onClick={room.leaveRoom} className="btn-ghost text-rose-200">

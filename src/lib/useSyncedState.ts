@@ -6,7 +6,7 @@ export function useSyncedState<T>(key: string, initial: T | (() => T)): [T, Disp
   const initRef = useRef(typeof initial === 'function' ? (initial as () => T)() : initial)
   const [local, setLocal] = useState<T>(() => initRef.current)
   const hasKey = Object.prototype.hasOwnProperty.call(game, key)
-  const value = !connected ? local : hasKey ? (game[key] as T) : initRef.current
+  const value = !connected ? local : hasKey ? (game[key] as T) : (isHost ? initRef.current : (game[key] as T) ?? initRef.current)
 
   useLayoutEffect(() => {
     if (connected && isHost && !hasKey) {

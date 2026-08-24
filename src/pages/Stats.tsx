@@ -2,9 +2,12 @@ import { Crown, Beer, RotateCcw } from 'lucide-react'
 import { useParty } from '../context/PartyContext'
 import { PlayerAvatar } from '../components/PlayerAvatar'
 import { WaterGlass } from '../components/WaterGlass'
+import { PlayNowBar } from '../components/PlayNowBar'
+import { useRoom } from '../context/RoomContext'
 
 export function Stats() {
   const { allPlayers, resetSips, waterCount, waterFound } = useParty()
+  const { connected } = useRoom()
   const ranked = [...allPlayers].sort((a, b) => b.sips - a.sips)
   const total = allPlayers.reduce((s, p) => s + p.sips, 0)
   const champ = ranked[0]
@@ -16,6 +19,11 @@ export function Stats() {
           <h1 className="font-display text-3xl">Tableau de bord</h1>
           <WaterGlass id="stats-title" size="sm" hint />
         </div>
+        {connected && (
+          <div className="mb-3">
+            <PlayNowBar block />
+          </div>
+        )}
         <p className="mt-1 text-sm text-white/60">Compteur de gorgées de la soirée. Amical, pas scientifique.</p>
       </div>
 

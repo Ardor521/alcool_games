@@ -6,6 +6,7 @@ import { CATEGORIES, GAMES } from '../lib/catalog'
 import { useParty } from '../context/PartyContext'
 import { useRoom } from '../context/RoomContext'
 import { WaterGlass } from '../components/WaterGlass'
+import { PlayNowBar } from '../components/PlayNowBar'
 
 export function Games() {
   const { activePlayers } = useParty()
@@ -34,6 +35,7 @@ export function Games() {
           <h1 className="font-display text-3xl">Choisis ton jeu</h1>
           <WaterGlass id="games-title" size="sm" />
         </div>
+        {connected && <div className="mb-3"><PlayNowBar block /></div>}
         <p className="mt-1 text-sm text-white/60">
           {connected && !isHost
             ? `Tu peux parcourir le catalogue. Seul l’hôte (${hostName || 'table'}) lance un jeu.`

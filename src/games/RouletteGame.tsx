@@ -1,6 +1,7 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo } from 'react'
 import { motion } from 'framer-motion'
 import { useParty } from '../context/PartyContext'
+import { useRoom } from '../context/RoomContext'
 import { useSyncedState } from '../lib/useSyncedState'
 import { TurnBanner } from '../components/TurnBanner'
 
@@ -19,11 +20,17 @@ function wheelBg(slices: Slice[]) {
 
 export function RouletteGame() {
   const { players, addSips, selfId, connected } = useParty()
+  const { isHost } = useRoom()
+  const n = Math.max(players.length, 1)
   const [turn, setTurn] = useSyncedState('rou.turn', 0)
   const [spinning, setSpinning] = useSyncedState('rou.spin', false)
   const [rot, setRot] = useSyncedState('rou.rot', 0)
   const [result, setResult] = useSyncedState<Slice | null>('rou.result', null)
-  const current = players[turn % Math.max(players.length, 1)]
+  const [spinIdx, setSpinIdx] = useSyncedState('rou.idx', -1)
+  const [token, setToken] = useSyncedState('rou.token', 0)
+  const [spinnerId, setSpinnerId] = useSyncedState<string | null>('rou.spinner', null)
+  const current = players[turn % n]
+  const spinner = players.find((p) => p.id === spinnerId) ?? current
   const mySpin = !connected || !selfId || selfId === current?.id
   const slices = useMemo<Slice[]>(
     () => [
@@ -40,32 +47,45 @@ export function RouletteGame() {
   )
 
   const spin = () => {
-    if (spinning || !mySpin) return
-    setSpinning(true)
-    setResult(null)
+    if (spinning || !mySpin || !current) return
     const idx = Math.floor(Math.random() * slices.length)
     const step = 360 / slices.length
     const extra = 6 * 360 + (360 - idx * step - step / 2)
-    setRot((prev) => prev + extra - (prev % 360))
-    window.setTimeout(() => {
-      setResult(slices[idx])
-      setSpinning(false)
-      setTurn((t) => t + 1)
-    }, 3200)
+    setSpinnerId(current.id)
+    setResult(null)
+    setSpinIdx(idx)
+    setToken((t) => t + 1)
+    setRot((prev) => Number(prev) + extra - (Number(prev) % 360))
+    setSpinning(true)
   }
 
+  useEffect(() => {
+    if (connected && !isHost) return
+    if (!spinning || spinIdx < 0) return
+    const t = window.setTimeout(() => {
+      setResult(slices[spinIdx % slices.length])
+      setSpinning(false)
+    }, 3200)
+    return () => window.clearTimeout(t)
+  }, [spinning, spinIdx, token, n, connected, isHost])
+
   const apply = (giveTo?: string) => {
-    if (!result || !current) return
+    if (!result || !spinner) return
     if (result.sips === 99) players.forEach((p) => addSips(p.id, 1))
     else if (result.sips < 0 && giveTo) addSips(giveTo, Math.abs(result.sips))
-    else if (result.sips > 0 && result.sips < 99) addSips(current.id, result.sips === 5 ? 4 : result.sips)
+    else if (result.sips > 0 && result.sips < 99) addSips(spinner.id, result.sips === 5 ? 4 : result.sips)
     setResult(null)
+    setTurn((v) => (Number(v) + 1) % n)
   }
 
   return (
     <div className="space-y-4">
-      <TurnBanner playerId={current?.id} label="Tour de" hint="C’est toi qui lances la roulette." />
-      <div className="grid grid-cols-[minmax(0,1.05fr)_minmax(150px,1fr)] items-start gap-2 sm:gap-3">
+      <TurnBanner
+        playerId={current?.id}
+        label={`Lancer ${turn + 1} · ${current?.name ?? ''}`}
+        hint={mySpin ? 'C’est toi qui lances.' : `Au tour de ${current?.name}`}
+      />
+      <div className="grid grid-cols-1 items-start gap-3 sm:grid-cols-[minmax(0,1.05fr)_minmax(150px,1fr)] sm:gap-2">
         <div className="min-w-0 space-y-3">
           <div className="relative w-full">
             <div className="absolute left-1/2 top-0 z-10 -translate-x-1/2 text-2xl text-fuchsia-300">▼</div>
@@ -92,17 +112,17 @@ export function RouletteGame() {
               <p className="font-display text-2xl leading-none sm:text-3xl">{result.label}</p>
               <p className="text-sm text-white/70">
                 {result.sips === 99 && 'Tout le monde boit 1 gorgée.'}
-                {result.sips === 0 && `${current?.name} passe son tour. Ouf.`}
-                {result.sips === 5 && `${current?.name} prend un cul sec (4 gorgées).`}
-                {result.sips > 0 && result.sips < 5 && `${current?.name} boit ${result.sips} gorgée(s).`}
-                {result.sips < 0 && `${current?.name} donne 2 gorgées à quelqu’un.`}
+                {result.sips === 0 && `${spinner?.name} passe son tour. Ouf.`}
+                {result.sips === 5 && `${spinner?.name} prend un cul sec (4 gorgées).`}
+                {result.sips > 0 && result.sips < 5 && `${spinner?.name} boit ${result.sips} gorgée(s).`}
+                {result.sips < 0 && `${spinner?.name} donne 2 gorgées à quelqu’un.`}
               </p>
               {result.sips < 0 ? (
                 <div className="space-y-2">
                   <p className="text-xs text-white/55">Choisis qui boit :</p>
                   <div className="flex flex-wrap gap-1.5">
                     {players
-                      .filter((p) => p.id !== current?.id)
+                      .filter((p) => p.id !== spinner?.id)
                       .map((p) => (
                         <button key={p.id} type="button" onClick={() => apply(p.id)} className="btn-ghost !px-2 !py-1 text-xs">
                           {p.name}
