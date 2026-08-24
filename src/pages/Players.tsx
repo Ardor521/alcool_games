@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import { ArrowRight, Pause, Play, Plus, RotateCcw, Trash2, UserPlus } from 'lucide-react'
 import { useParty } from '../context/PartyContext'
+import { useRoom } from '../context/RoomContext'
 import { SUGGESTED_NAMES } from '../lib/catalog'
 import { PlayerAvatar } from '../components/PlayerAvatar'
 import { SipBadge } from '../components/SipToast'
@@ -11,6 +12,7 @@ import { WaterGlass } from '../components/WaterGlass'
 export function Players() {
   const { allPlayers, addPlayer, removePlayer, clearPlayers, resetSips, togglePause, players, selfId, connected } =
     useParty()
+  const { isHost } = useRoom()
   const [name, setName] = useState('')
   const [error, setError] = useState('')
 
@@ -39,6 +41,11 @@ export function Players() {
         </p>
       </div>
 
+      {connected && !isHost && (
+        <p className="text-sm text-fuchsia-200">Tu es déjà à la table. Seul l’hôte gère la liste.</p>
+      )}
+
+      {(!connected || isHost) && (
       <form onSubmit={onSubmit} className="card flex items-center gap-2 p-2 pl-3">
         <UserPlus className="h-4 w-4 shrink-0 text-fuchsia-300" />
         <input
@@ -53,6 +60,7 @@ export function Players() {
           Ajouter
         </button>
       </form>
+      )}
 
       {error && <p className="text-sm text-rose-300">{error}</p>}
 
@@ -105,33 +113,37 @@ export function Players() {
                 </p>
                 <SipBadge sips={p.sips} />
               </div>
-              <button
-                type="button"
-                onClick={() => togglePause(p.id)}
-                className={`rounded-lg p-2 ${
-                  p.paused
-                    ? 'text-emerald-300 hover:bg-emerald-400/10'
-                    : 'text-white/50 hover:bg-white/5 hover:text-amber-200'
-                }`}
-                aria-label={p.paused ? `Réactiver ${p.name}` : `Mettre ${p.name} en pause`}
-                title={p.paused ? 'Réactiver' : 'Mettre en pause'}
-              >
-                {p.paused ? <Play className="h-4 w-4" /> : <Pause className="h-4 w-4" />}
-              </button>
-              <button
-                type="button"
-                onClick={() => removePlayer(p.id)}
-                className="rounded-lg p-2 text-white/40 hover:bg-white/5 hover:text-rose-300"
-                aria-label={`Retirer ${p.name}`}
-              >
-                <Trash2 className="h-4 w-4" />
-              </button>
+              {(!connected || isHost || p.id === selfId) && (
+                <button
+                  type="button"
+                  onClick={() => togglePause(p.id)}
+                  className={`rounded-lg p-2 ${
+                    p.paused
+                      ? 'text-emerald-300 hover:bg-emerald-400/10'
+                      : 'text-white/50 hover:bg-white/5 hover:text-amber-200'
+                  }`}
+                  aria-label={p.paused ? `Réactiver ${p.name}` : `Mettre ${p.name} en pause`}
+                  title={p.paused ? 'Réactiver' : 'Mettre en pause'}
+                >
+                  {p.paused ? <Play className="h-4 w-4" /> : <Pause className="h-4 w-4" />}
+                </button>
+              )}
+              {(!connected || isHost) && (
+                <button
+                  type="button"
+                  onClick={() => removePlayer(p.id)}
+                  className="rounded-lg p-2 text-white/40 hover:bg-white/5 hover:text-rose-300"
+                  aria-label={`Retirer ${p.name}`}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              )}
             </motion.div>
           ))}
         </AnimatePresence>
       </div>
 
-      {allPlayers.length > 0 && (
+      {allPlayers.length > 0 && (!connected || isHost) && (
         <div className="flex flex-wrap gap-2">
           <button type="button" onClick={resetSips} className="btn-ghost text-sm">
             <RotateCcw className="h-4 w-4" />

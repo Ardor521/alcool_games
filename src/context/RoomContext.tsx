@@ -12,6 +12,7 @@ import type { DataConnection } from 'peerjs'
 import type { Player } from '../types'
 import { PLAYER_COLORS } from '../lib/catalog'
 import { getSelfId, makeRoomCode, normalizeRoomCode, peerIdFor } from '../lib/roomCode'
+import { guestMayAct, type ControlMode } from '../lib/control'
 
 export type RoomAction =
   | { type: 'sips'; id: string; amount: number }
@@ -27,6 +28,7 @@ export type RoomAction =
   | { type: 'gameSet'; key: string; value: unknown }
   | { type: 'gamePatch'; key: string; field: string; value: unknown }
   | { type: 'gameReset' }
+  | { type: 'control'; mode: ControlMode }
 
 type Snapshot = {
   v: number
@@ -37,13 +39,16 @@ type Snapshot = {
   turnId: string | null
   game: Record<string, unknown>
   hostName: string
+  hostId: string | null
+  control: ControlMode
 }
 
 type Wire =
   | { t: 'hello'; player: Player }
-  | { t: 'action'; a: RoomAction }
+  | { t: 'action'; a: RoomAction; from: string }
   | { t: 'state'; s: Snapshot }
   | { t: 'bye'; id: string }
+  | { t: 'ping' }
 
 type Status = 'idle' | 'connecting' | 'connected' | 'error'
 
@@ -64,6 +69,8 @@ type RoomContextValue = {
   turnId: string | null
   game: Record<string, unknown>
   hostName: string
+  hostId: string | null
+  control: ControlMode
   connected: boolean
   createRoom: (name: string) => Promise<string>
   joinRoom: (code: string, name: string) => Promise<void>
@@ -87,6 +94,8 @@ function emptySnap(hostName = ''): Snapshot {
     turnId: null,
     game: {},
     hostName,
+    hostId: null,
+    control: 'host',
   }
 }
 
@@ -166,6 +175,9 @@ function applyAction(prev: Snapshot, action: RoomAction): Snapshot {
     case 'gameReset':
       next.game = {}
       break
+    case 'control':
+      next.control = action.mode
+      break
   }
   return next
 }
@@ -198,6 +210,7 @@ export function RoomProvider({ children }: { children: ReactNode }) {
   const peerRef = useRef<import('peerjs').default | null>(null)
   const connsRef = useRef<Map<string, DataConnection>>(new Map())
   const hostConnRef = useRef<DataConnection | null>(null)
+  const peerPlayerRef = useRef<Map<string, string>>(new Map())
   snapRef.current = snap
   hostRef.current = isHost
 
@@ -249,10 +262,25 @@ export function RoomProvider({ children }: { children: ReactNode }) {
       conn.on('data', (raw) => {
         const msg = raw as Wire
         if (msg.t === 'hello') {
+          peerPlayerRef.current.set(conn.peer, msg.player.id)
           applyAndPush({ type: 'addPlayer', player: { ...msg.player, online: true, device: true } })
-          conn.send({ t: 'state', s: snapRef.current })
+          window.setTimeout(() => {
+            if (conn.open) conn.send({ t: 'state', s: snapRef.current })
+          }, 40)
+        } else if (msg.t === 'ping') {
+          if (conn.open) conn.send({ t: 'state', s: snapRef.current })
         } else if (msg.t === 'action') {
-          applyAndPush(msg.a)
+          const actor = peerPlayerRef.current.get(conn.peer) ?? msg.from
+          const snap = snapRef.current
+          const allowed = guestMayAct(
+            msg.a.type,
+            snap.control,
+            snap.turnId === actor,
+            actor,
+            'id' in msg.a ? (msg.a as { id?: string }).id : undefined,
+          )
+          if (allowed) applyAndPush(msg.a)
+          else if (conn.open) conn.send({ t: 'state', s: snap })
         } else if (msg.t === 'bye') {
           pushState({
             ...applyAction(snapRef.current, { type: 'sips', id: msg.id, amount: 0 }),
@@ -299,7 +327,7 @@ export function RoomProvider({ children }: { children: ReactNode }) {
         peer.on('open', () => {
           window.clearTimeout(t)
           const me = makePlayer(trimmed, 0, selfId)
-          const initial = { ...emptySnap(trimmed), players: [me], v: 1 }
+          const initial = { ...emptySnap(trimmed), players: [me], v: 1, hostId: selfId, control: 'host' as const }
           hostRef.current = true
           setIsHost(true)
           setRoomCode(code)
@@ -370,14 +398,21 @@ export function RoomProvider({ children }: { children: ReactNode }) {
           conn.on('data', (raw) => {
             const msg = raw as Wire
             if (msg.t === 'state') {
+              if (!msg.s) return
               window.clearTimeout(t)
               hostRef.current = false
               setIsHost(false)
               setRoomCode(code)
-              snapRef.current = msg.s
-              setSnap(msg.s)
+              const incoming: Snapshot = {
+                ...emptySnap(msg.s.hostName),
+                ...msg.s,
+                control: msg.s.control ?? 'host',
+                hostId: msg.s.hostId ?? null,
+              }
+              snapRef.current = incoming
+              setSnap(incoming)
               setStatus('connected')
-              setPeerCount(msg.s.players.filter((p) => p.online).length)
+              setPeerCount(incoming.players.filter((p) => p.online !== false).length)
               try {
                 localStorage.setItem(LAST_KEY, JSON.stringify({ code, name: trimmed, role: 'guest' }))
               } catch {
@@ -426,9 +461,11 @@ export function RoomProvider({ children }: { children: ReactNode }) {
     (action: RoomAction) => {
       if (status !== 'connected') return
       if (hostRef.current) applyAndPush(action)
-      else hostConnRef.current?.send({ t: 'action', a: action } satisfies Wire)
+      else if (hostConnRef.current?.open) {
+        hostConnRef.current.send({ t: 'action', a: action, from: selfId } satisfies Wire)
+      }
     },
-    [applyAndPush, status],
+    [applyAndPush, selfId, status],
   )
 
   const setGameKey = useCallback(
@@ -446,6 +483,14 @@ export function RoomProvider({ children }: { children: ReactNode }) {
   )
 
   useEffect(() => () => destroyPeer(), [destroyPeer])
+
+  useEffect(() => {
+    if (status !== 'connected' || isHost) return
+    const t = window.setInterval(() => {
+      if (hostConnRef.current?.open) hostConnRef.current.send({ t: 'ping' } satisfies Wire)
+    }, 2500)
+    return () => window.clearInterval(t)
+  }, [status, isHost])
 
   const value = useMemo<RoomContextValue>(
     () => ({
@@ -465,6 +510,8 @@ export function RoomProvider({ children }: { children: ReactNode }) {
       turnId: snap.turnId,
       game: snap.game,
       hostName: snap.hostName,
+      hostId: snap.hostId,
+      control: snap.control ?? 'host',
       connected: status === 'connected',
       createRoom,
       joinRoom,

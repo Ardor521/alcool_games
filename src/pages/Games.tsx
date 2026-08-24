@@ -4,10 +4,12 @@ import { motion } from 'framer-motion'
 import { Search, Users } from 'lucide-react'
 import { CATEGORIES, GAMES } from '../lib/catalog'
 import { useParty } from '../context/PartyContext'
+import { useRoom } from '../context/RoomContext'
 import { WaterGlass } from '../components/WaterGlass'
 
 export function Games() {
   const { activePlayers } = useParty()
+  const { connected, isHost, hostName } = useRoom()
   const [cat, setCat] = useState('all')
   const [q, setQ] = useState('')
 
@@ -33,9 +35,11 @@ export function Games() {
           <WaterGlass id="games-title" size="sm" />
         </div>
         <p className="mt-1 text-sm text-white/60">
-          {activePlayers.length < 2
-            ? 'Ajoute au moins 2 joueurs actifs avant de lancer une partie.'
-            : `${activePlayers.length} joueurs actifs · ${list.length} jeu${list.length > 1 ? 'x' : ''}`}
+          {connected && !isHost
+            ? `Seul l’hôte (${hostName || 'table'}) choisit le jeu. Tu suis la table.`
+            : activePlayers.length < 2
+              ? 'Ajoute au moins 2 joueurs actifs avant de lancer une partie.'
+              : `${activePlayers.length} joueurs actifs · ${list.length} jeu${list.length > 1 ? 'x' : ''}`}
         </p>
       </div>
 
@@ -77,8 +81,11 @@ export function Games() {
           return (
             <motion.div key={g.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.04 }}>
               <Link
-                to={missing ? '/joueurs' : `/jeu/${g.id}`}
-                className={`card group block overflow-hidden ${missing ? 'opacity-70' : ''}`}
+                to={connected && !isHost ? '#' : missing ? '/joueurs' : `/jeu/${g.id}`}
+                onClick={(e) => {
+                  if (connected && !isHost) e.preventDefault()
+                }}
+                className={`card group block overflow-hidden ${missing || (connected && !isHost) ? 'opacity-70' : ''}`}
               >
                 <div className="relative h-40">
                   <img
@@ -106,7 +113,10 @@ export function Games() {
                     {g.tagline}
                   </p>
                   <p className="text-sm text-white/55">{g.description}</p>
-                  {missing && (
+                  {connected && !isHost && (
+                    <p className="pt-1 text-xs text-fuchsia-200">En attente de l’hôte…</p>
+                  )}
+                  {missing && !(connected && !isHost) && (
                     <p className="pt-1 text-xs text-amber-200">
                       Il manque des joueurs actifs — encore {g.minPlayers - activePlayers.length} min.
                     </p>

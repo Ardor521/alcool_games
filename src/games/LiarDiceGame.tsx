@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useSyncedMap, useSyncedState } from '../lib/useSyncedState'
 import { useParty } from '../context/PartyContext'
+import { useTableControl } from '../lib/useTableControl'
 import { TurnBanner } from '../components/TurnBanner'
 import { PlayerAvatar } from '../components/PlayerAvatar'
 import { WaterGlass } from '../components/WaterGlass'
@@ -56,6 +57,7 @@ function HiddenCup() {
 
 export function LiarDiceGame() {
   const { players, addSips, selfId, connected } = useParty()
+  const { isHost, setControl } = useTableControl()
   const [turn, setTurn] = useSyncedState('liar.turn', 0)
   const [phase, setPhase] = useSyncedState<Phase>('liar.phase', 'roll')
   const [seeIndex, setSeeIndex] = useSyncedState('liar.see', 0)
@@ -92,6 +94,7 @@ export function LiarDiceGame() {
     setSeeIndex(0)
     setShowOthers(false)
     setPhase('see')
+    setControl('all')
     setMsg(
       connected
         ? `Chacun lance ses 5 dés sur son téléphone. Pari sur ${totalDice} dés.`
@@ -102,6 +105,7 @@ export function LiarDiceGame() {
   const rollMine = () => {
     const target = connected ? me : viewer
     if (!target) return
+    if (connected && selfId && target.id !== selfId && !isHost) return
     setDiceField(target.id, roll5())
     setSeenField(target.id, true)
     if (!connected) {
@@ -115,12 +119,14 @@ export function LiarDiceGame() {
 
   const confirmAllRolled = () => {
     setPhase('bid')
+    setControl('turn')
     setMsg(`${announcer?.name} ouvre les enchères sur les ${totalDice} dés de la table.`)
   }
 
   useEffect(() => {
     if (phase === 'see' && allRolled) {
       setPhase('bid')
+      setControl('turn')
       setMsg(`${announcer?.name} ouvre les enchères sur les ${totalDice} dés de la table.`)
     }
   }, [phase, allRolled])

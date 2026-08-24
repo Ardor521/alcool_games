@@ -125,21 +125,21 @@ export function Salon() {
         </div>
 
         {!room.isHost && (
-          <label className="card flex items-center justify-between gap-3 p-4 text-sm">
-            <span>Suivre la table (même jeu que l’hôte)</span>
-            <input
-              type="checkbox"
-              checked={room.followTable}
-              onChange={(e) => room.setFollowTable(e.target.checked)}
-              className="h-4 w-4 accent-fuchsia-500"
-            />
-          </label>
+          <p className="card p-4 text-sm text-white/70">
+            L’hôte choisit le jeu. Ton écran suit la table. Tu joues seulement quand c’est ton tour.
+          </p>
         )}
 
         <div className="flex flex-wrap gap-2">
-          <Link to="/jeux" className="btn-primary flex-1 justify-center">
-            {room.isHost ? 'Lancer un jeu' : 'Voir les jeux'}
-          </Link>
+          {room.isHost ? (
+            <Link to="/jeux" className="btn-primary flex-1 justify-center">
+              Lancer un jeu
+            </Link>
+          ) : (
+            <div className="btn-ghost flex-1 justify-center opacity-60">
+              En attente de l’hôte…
+            </div>
+          )}
           <button type="button" onClick={room.leaveRoom} className="btn-ghost text-rose-200">
             <LogOut className="h-4 w-4" />
             Quitter

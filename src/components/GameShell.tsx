@@ -3,8 +3,10 @@ import { Link, useNavigate } from 'react-router-dom'
 import { ArrowLeft, Users } from 'lucide-react'
 import type { GameDef } from '../types'
 import { useParty } from '../context/PartyContext'
+import { useTableControl } from '../lib/useTableControl'
 import { PlayerAvatar } from './PlayerAvatar'
 import { WaterGlass } from './WaterGlass'
+import { TurnLock } from './TurnLock'
 
 export function GameShell({
   game,
@@ -17,10 +19,12 @@ export function GameShell({
 }) {
   const navigate = useNavigate()
   const { activePlayers, pausedPlayers, activeTurnId, selfId } = useParty()
+  const { connected, isHost, myTurn, mode, turnName } = useTableControl()
 
   return (
     <div className="space-y-4">
       <div className="flex items-start gap-3">
+        {(!connected || isHost) && (
         <button
           type="button"
           onClick={() => navigate('/jeux')}
@@ -29,6 +33,7 @@ export function GameShell({
         >
           <ArrowLeft className="h-4 w-4" />
         </button>
+        )}
         <div className="min-w-0 flex-1">
           <p className="text-[11px] uppercase tracking-[0.2em] text-white/45">En cours</p>
           <h1 className="font-display text-2xl leading-tight sm:text-3xl">{game.title}</h1>
@@ -74,6 +79,7 @@ export function GameShell({
             {pausedPlayers.length} en pause
           </span>
         )}
+        {(!connected || isHost) && (
         <Link
           to="/joueurs"
           className="flex shrink-0 items-center gap-1 rounded-full border border-dashed border-white/20 px-3 py-1 text-xs text-white/50 hover:text-white"
@@ -81,9 +87,22 @@ export function GameShell({
           <Users className="h-3.5 w-3.5" />
           Gérer
         </Link>
+        )}
       </div>
 
-      {children}
+      {connected && (
+        <p className="text-center text-[11px] uppercase tracking-widest text-white/40">
+          {isHost
+            ? 'Tu es l’hôte — tu lances et tu avances la table.'
+            : mode === 'all'
+              ? 'Tout le monde peut jouer maintenant.'
+              : myTurn
+                ? 'C’est à toi — tes actions passent sur tous les écrans.'
+                : `En attente de ${turnName ?? 'l’hôte'}…`}
+        </p>
+      )}
+
+      <TurnLock>{children}</TurnLock>
       {footer}
     </div>
   )

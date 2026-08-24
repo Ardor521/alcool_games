@@ -3,10 +3,12 @@ import { motion } from 'framer-motion'
 import { ArrowRight, Dices, ShieldAlert, Sparkles, Users } from 'lucide-react'
 import { GAMES } from '../lib/catalog'
 import { useParty } from '../context/PartyContext'
+import { useRoom } from '../context/RoomContext'
 import { WaterGlass } from '../components/WaterGlass'
 
 export function Home() {
   const { players, allPlayers } = useParty()
+  const { connected, isHost } = useRoom()
   const hits = GAMES.slice(0, 6)
 
   return (
@@ -30,14 +32,29 @@ export function Home() {
               leur téléphone — ou passe le tien. Que le chaos commence.
             </p>
             <div className="mt-5 flex flex-wrap gap-3">
-              <Link to={allPlayers.length >= 2 ? '/jeux' : '/salon'} className="btn-primary">
-                {allPlayers.length >= 2 ? 'Choisir un jeu' : 'Créer un salon'}
+              <Link
+                to={
+                  connected && !isHost
+                    ? '/salon'
+                    : allPlayers.length >= 2
+                      ? '/jeux'
+                      : '/salon'
+                }
+                className="btn-primary"
+              >
+                {connected && !isHost
+                  ? 'Rejoindre la table'
+                  : allPlayers.length >= 2
+                    ? 'Choisir un jeu'
+                    : 'Créer un salon'}
                 <ArrowRight className="h-4 w-4" />
               </Link>
-              <Link to="/aleatoire" className="btn-ghost">
-                <Dices className="h-4 w-4" />
-                Jeu au hasard
-              </Link>
+              {(!connected || isHost) && (
+                <Link to="/aleatoire" className="btn-ghost">
+                  <Dices className="h-4 w-4" />
+                  Jeu au hasard
+                </Link>
+              )}
             </div>
           </motion.div>
         </div>
